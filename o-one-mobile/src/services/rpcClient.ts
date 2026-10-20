@@ -6,7 +6,8 @@ export interface RPCRequest {
 
 export interface RPCResponse {
   id: string;
-  type?: 'stdout' | 'stderr' | 'done' | 'telemetry';
+  type?: 'stdout' | 'stderr' | 'done' | 'telemetry' | 'stream_token' | 'process_exit';
+  token?: string;
   result?: any;
   error?: string;
   data?: any;
