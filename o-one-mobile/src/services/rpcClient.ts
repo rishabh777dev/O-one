@@ -1,3 +1,5 @@
+import { NativeModules } from 'react-native';
+
 export interface RPCRequest {
   id: string;
   method: string;
@@ -15,9 +17,23 @@ export interface RPCResponse {
 
 export type MessageHandler = (res: RPCResponse) => void;
 
+function getDefaultHostUrl(): string {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+    return `ws://${window.location.hostname}:8443`;
+  }
+  const scriptURL = NativeModules.SourceCode?.scriptURL;
+  if (scriptURL) {
+    const match = scriptURL.match(/https?:\/\/([^/:]+)/);
+    if (match && match[1]) {
+      return `ws://${match[1]}:8443`;
+    }
+  }
+  return 'ws://192.168.1.7:8443';
+}
+
 class O1RPCClient {
   private ws: WebSocket | null = null;
-  private hostUrl: string = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost' ? 'ws://localhost:8443' : 'ws://100.92.14.8:8443';
+  private hostUrl: string = getDefaultHostUrl();
   private handlers: Map<string, MessageHandler> = new Map();
   private isConnected: boolean = false;
   private reconnectTimer: any = null;
@@ -35,6 +51,10 @@ class O1RPCClient {
     this.connect();
   }
 
+  public getHost(): string {
+    return this.hostUrl;
+  }
+
   public connect() {
     if (this.ws) {
       try {
@@ -43,11 +63,12 @@ class O1RPCClient {
     }
 
     try {
+      console.log(`[O1 RPC] Connecting to host daemon at ${this.hostUrl}...`);
       this.ws = new WebSocket(this.hostUrl);
 
       this.ws.onopen = () => {
         this.isConnected = true;
-        console.log(`[O1 RPC] Connected to host daemon at ${this.hostUrl}`);
+        console.log(`[O1 RPC] Connected successfully to host daemon at ${this.hostUrl}`);
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
@@ -71,12 +92,12 @@ class O1RPCClient {
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        console.log('[O1 RPC] Disconnected from host daemon. Retrying in 5s...');
+        console.log(`[O1 RPC] Connection closed to ${this.hostUrl}. Reconnecting in 5s...`);
         this.scheduleReconnect();
       };
 
       this.ws.onerror = (err) => {
-        console.warn('[O1 RPC] WebSocket error:', err);
+        console.warn(`[O1 RPC] WebSocket error connecting to ${this.hostUrl}:`, err);
       };
     } catch (e) {
       console.warn('[O1 RPC] Connection failed:', e);
