@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ChatMessage } from '../types';
+import { rpcClient, RPCResponse } from '../services/rpcClient';
 
 interface AgentState {
   messages: Record<string, ChatMessage[]>;
@@ -10,100 +11,93 @@ interface AgentState {
 const initialMessages: Record<string, ChatMessage[]> = {
   chief: [
     {
-      id: 'msg-1',
+      id: 'chief-welcome',
       sender: 'agent',
-      content: 'I have prepared the follow-up meeting email for the Acme partnership review.',
-      timestamp: '5:56 PM',
-      actionCard: {
-        title: 'New email',
-        fields: [
-          { label: 'From', value: 'sam@x.ai' },
-          { label: 'To', value: 'vicky@acme.co' },
-          { label: 'Subject', value: "Re: Thursday's num..." },
-        ],
-        body: "Hi Vicky,\n\nThursday works. I'll bring the usage summary. Seats and the integration counts are both in there.\n\nSam",
-        primaryActionLabel: 'Send email',
-        secondaryActionLabel: 'Discard',
-        actionType: 'email',
-      },
-    },
-    {
-      id: 'msg-2',
-      sender: 'user',
-      content: 'send the easy one, leave legal',
-      timestamp: '5:58 PM',
-    },
-    {
-      id: 'msg-3',
-      sender: 'agent',
-      content: 'sent one. legal stays. meeting brief for acme is in the thread.',
-      timestamp: '5:58 PM',
+      content: 'Chief active on local Hermes engine (gpt-5.6-luna). Ready to execute commands or software engineering tasks.',
+      timestamp: 'Just now',
     },
   ],
   'support-agent': [
     {
-      id: 'sa-1',
-      sender: 'user',
-      content: 'Webhooks for Stripe customer checkouts are dropping on staging. Can you investigate and fix it?',
-      timestamp: '6:12 PM',
-    },
-    {
-      id: 'sa-2',
+      id: 'sa-welcome',
       sender: 'agent',
-      content: 'I investigated the Sentry error log. The raw request body stream was consumed by Express JSON parser before the Stripe signature check could verify the HMAC digest.',
-      timestamp: '6:13 PM',
-      thoughtTrace:
-        '1. Queried staging Sentry logs via Tailscale tunnel.\n2. Captured SignatureVerificationError in `api/webhooks/stripe.ts`.\n3. Antigravity CLI inspected route middleware sequence.\n4. Drafted raw buffer preservation fix on branch `fix/stripe-hmac`.',
-      actionCard: {
-        title: 'Approval Required: Deploy Staging Patch',
-        fields: [
-          { label: 'Branch', value: 'fix/stripe-hmac' },
-          { label: 'Target', value: 'Azure VM Staging Container' },
-        ],
-        body: 'Hermes will commit the fix, push to remote repository, and reload the Docker container.',
-        primaryActionLabel: 'Approve & Deploy',
-        secondaryActionLabel: 'Deny',
-        actionType: 'deploy',
-      },
+      content: 'Support Agent standing by. Connected to Sentry, GitHub, and local Hermes pipeline.',
+      timestamp: 'Just now',
     },
   ],
   'devops-sentinel': [
     {
-      id: 'dev-1',
+      id: 'dev-welcome',
       sender: 'agent',
-      content: 'Azure VM telemetry is nominal. 4 vCPUs active, RAM usage at 28%, Antigravity CLI daemon listening on port 8443.',
-      timestamp: '08:00 AM',
+      content: 'DevOps Sentinel active. Monitoring host CPU, RAM, and Antigravity CLI daemon.',
+      timestamp: 'Just now',
     },
   ],
 };
 
-export const useAgentStore = create<AgentState>((set) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
   messages: initialMessages,
-  sendMessage: (agentId, text) =>
-    set((state) => {
-      const currentList = state.messages[agentId] || [];
-      const userMsg: ChatMessage = {
-        id: `msg-${Date.now()}`,
-        sender: 'user',
-        content: text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
 
-      // Mock simulated responsive agent
-      const agentReply: ChatMessage = {
-        id: `reply-${Date.now()}`,
-        sender: 'agent',
-        content: `Executing instruction on Azure VM via Antigravity CLI... Task queued.`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
+  sendMessage: (agentId, text) => {
+    const currentList = get().messages[agentId] || [];
+    const userMsgId = `user-${Date.now()}`;
+    const agentMsgId = `agent-${Date.now()}`;
 
-      return {
-        messages: {
-          ...state.messages,
-          [agentId]: [...currentList, userMsg, agentReply],
-        },
-      };
-    }),
+    const userMsg: ChatMessage = {
+      id: userMsgId,
+      sender: 'user',
+      content: text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    const initialAgentMsg: ChatMessage = {
+      id: agentMsgId,
+      sender: 'agent',
+      content: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    // Append user message and placeholder agent message
+    set({
+      messages: {
+        ...get().messages,
+        [agentId]: [...currentList, userMsg, initialAgentMsg],
+      },
+    });
+
+    // Send real command to host daemon
+    let accumulatedText = '';
+
+    rpcClient.send(
+      'hermes.chat',
+      { query: text, agentId },
+      (res: RPCResponse) => {
+        if (res.type === 'stream_token' && res.token) {
+          accumulatedText += res.token;
+          const updatedList = (get().messages[agentId] || []).map((m) =>
+            m.id === agentMsgId ? { ...m, content: accumulatedText } : m
+          );
+          set({
+            messages: {
+              ...get().messages,
+              [agentId]: updatedList,
+            },
+          });
+        } else if (res.type === 'done' || res.result) {
+          const finalText = res.result || accumulatedText;
+          const updatedList = (get().messages[agentId] || []).map((m) =>
+            m.id === agentMsgId ? { ...m, content: finalText } : m
+          );
+          set({
+            messages: {
+              ...get().messages,
+              [agentId]: updatedList,
+            },
+          });
+        }
+      }
+    );
+  },
 
   resolveActionCard: (agentId, messageId, approved) =>
     set((state) => {
@@ -113,7 +107,7 @@ export const useAgentStore = create<AgentState>((set) => ({
           return {
             ...m,
             content: approved
-              ? `Action Approved: ${m.actionCard.title} completed successfully on host.`
+              ? `Action Approved: ${m.actionCard.title} completed on host.`
               : `Action Discarded: ${m.actionCard.title}.`,
             actionCard: undefined,
           };

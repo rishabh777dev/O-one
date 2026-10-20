@@ -16,10 +16,14 @@ export type MessageHandler = (res: RPCResponse) => void;
 
 class O1RPCClient {
   private ws: WebSocket | null = null;
-  private hostUrl: string = 'ws://100.92.14.8:8443';
+  private hostUrl: string = typeof window !== 'undefined' && window.location && window.location.hostname === 'localhost' ? 'ws://localhost:8443' : 'ws://100.92.14.8:8443';
   private handlers: Map<string, MessageHandler> = new Map();
   private isConnected: boolean = false;
   private reconnectTimer: any = null;
+
+  constructor() {
+    this.connect();
+  }
 
   public setHost(ipOrUrl: string) {
     if (ipOrUrl.startsWith('ws://') || ipOrUrl.startsWith('wss://')) {
