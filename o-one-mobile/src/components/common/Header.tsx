@@ -15,21 +15,29 @@ export const Header: React.FC = () => {
   } = useAppStore();
 
   const isIDE = currentSurface === 'ide';
+  const isTerminal = currentSurface === 'terminal';
   const isWorkflows = currentSurface === 'workflows';
   const isMarketplace = currentSurface === 'marketplace';
+  const isBuilder = currentSurface === 'builder' || !activeAgent;
 
-  let title = activeAgent.name;
-  let statusText = 'Ready to send';
+  let title = activeAgent ? activeAgent.name : 'Create Agent';
+  let statusText = activeAgent ? `${activeAgent.engineLabel} · Ready` : 'Blank Slate';
 
-  if (isIDE) {
+  if (isBuilder) {
+    title = 'Agent Studio';
+    statusText = 'Blank Slate · Build Engine';
+  } else if (isTerminal) {
+    title = 'Linux Shell';
+    statusText = 'Ubuntu 24.04 WSL2 Active';
+  } else if (isIDE) {
     title = `${activeProject} (IDE)`;
-    statusText = 'Antigravity CLI · Connected';
+    statusText = 'Workspace Synced';
   } else if (isWorkflows) {
-    title = 'Workflows';
-    statusText = '2 Active Pipelines';
+    title = 'Visual Workflows';
+    statusText = 'Pipelines & Triggers';
   } else if (isMarketplace) {
     title = 'MCP Hub';
-    statusText = 'Connectors & Tools';
+    statusText = '68+ Tools & Connectors';
   }
 
   const handleOpenHost = () => {
@@ -51,12 +59,12 @@ export const Header: React.FC = () => {
         <Menu size={18} color="#FFFFFF" strokeWidth={2.2} />
       </TouchableOpacity>
 
-      {/* Center Agent / Surface Pill with Nous Badge */}
+      {/* Center Surface Pill */}
       <TouchableOpacity
         style={styles.centerPill}
         onPress={openDrawer}
         activeOpacity={0.8}
-        accessibilityLabel="Switch Agent or Project"
+        accessibilityLabel="Switch Agent or Destination"
       >
         <View style={styles.nousBadge}>
           <View style={styles.nousDot} />

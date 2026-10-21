@@ -1,44 +1,33 @@
 import { create } from 'zustand';
-import { ChatMessage } from '../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ChatMessage, Agent } from '../types';
 import { rpcClient, RPCResponse } from '../services/rpcClient';
+
+const STORAGE_KEY_MESSAGES = '@o1_chat_messages_v2';
 
 interface AgentState {
   messages: Record<string, ChatMessage[]>;
-  sendMessage: (agentId: string, text: string) => void;
+  initMessages: () => Promise<void>;
+  sendMessage: (agent: Agent, text: string) => void;
   resolveActionCard: (agentId: string, messageId: string, approved: boolean) => void;
+  clearMessages: (agentId: string) => void;
 }
 
-const initialMessages: Record<string, ChatMessage[]> = {
-  chief: [
-    {
-      id: 'chief-welcome',
-      sender: 'agent',
-      content: 'Chief active on local Hermes engine (gpt-5.6-luna). Ready to execute commands or software engineering tasks.',
-      timestamp: 'Just now',
-    },
-  ],
-  'support-agent': [
-    {
-      id: 'sa-welcome',
-      sender: 'agent',
-      content: 'Support Agent standing by. Connected to Sentry, GitHub, and local Hermes pipeline.',
-      timestamp: 'Just now',
-    },
-  ],
-  'devops-sentinel': [
-    {
-      id: 'dev-welcome',
-      sender: 'agent',
-      content: 'DevOps Sentinel active. Monitoring host CPU, RAM, and Antigravity CLI daemon.',
-      timestamp: 'Just now',
-    },
-  ],
-};
-
 export const useAgentStore = create<AgentState>((set, get) => ({
-  messages: initialMessages,
+  // Pure blank slate: no hardcoded agent messages
+  messages: {},
 
-  sendMessage: (agentId, text) => {
+  initMessages: async () => {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (data) {
+        set({ messages: JSON.parse(data) });
+      }
+    } catch {}
+  },
+
+  sendMessage: (agent, text) => {
+    const agentId = agent.id;
     const currentList = get().messages[agentId] || [];
     const userMsgId = `user-${Date.now()}`;
     const agentMsgId = `agent-${Date.now()}`;
@@ -57,20 +46,54 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    // Append user message and placeholder agent message
+    const updatedWithUser = [...currentList, userMsg, initialAgentMsg];
+
     set({
       messages: {
         ...get().messages,
-        [agentId]: [...currentList, userMsg, initialAgentMsg],
+        [agentId]: updatedWithUser,
       },
     });
 
-    // Send real command to host daemon
     let accumulatedText = '';
 
+    // Choose execution method based on agent's engine
+    if (agent.engine === 'linux_shell') {
+      rpcClient.send(
+        'terminal.execute',
+        { command: text, shellType: 'wsl' },
+        (res: RPCResponse) => {
+          if ((res.type === 'stdout' || res.type === 'stderr') && res.data) {
+            accumulatedText += res.data;
+            const updated = (get().messages[agentId] || []).map((m) =>
+              m.id === agentMsgId ? { ...m, content: accumulatedText } : m
+            );
+            set({ messages: { ...get().messages, [agentId]: updated } });
+          } else if (res.type === 'done') {
+            const final = accumulatedText || 'Command executed (Exit 0)';
+            const updated = (get().messages[agentId] || []).map((m) =>
+              m.id === agentMsgId ? { ...m, content: final } : m
+            );
+            set({ messages: { ...get().messages, [agentId]: updated } });
+            AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(get().messages));
+          }
+        }
+      );
+      return;
+    }
+
+    const rpcMethod = agent.engine === 'antigravity' ? 'antigravity.run' : 'hermes.chat';
+
     rpcClient.send(
-      'hermes.chat',
-      { query: text, agentId },
+      rpcMethod,
+      {
+        query: text,
+        prompt: text,
+        model: agent.model,
+        systemPrompt: agent.systemPrompt,
+        cwd: agent.workspacePath,
+        agentId,
+      },
       (res: RPCResponse) => {
         if (res.type === 'stream_token' && res.token) {
           accumulatedText += res.token;
@@ -94,6 +117,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
               [agentId]: updatedList,
             },
           });
+          AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(get().messages));
         }
       }
     );
@@ -107,19 +131,23 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           return {
             ...m,
             content: approved
-              ? `Action Approved: ${m.actionCard.title} completed on host.`
-              : `Action Discarded: ${m.actionCard.title}.`,
+              ? `✓ Approved: ${m.actionCard.title} executed on host.`
+              : `✕ Discarded: ${m.actionCard.title}.`,
             actionCard: undefined,
           };
         }
         return m;
       });
 
-      return {
-        messages: {
-          ...state.messages,
-          [agentId]: updated,
-        },
-      };
+      const newMessages = { ...state.messages, [agentId]: updated };
+      AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(newMessages));
+      return { messages: newMessages };
+    }),
+
+  clearMessages: (agentId) =>
+    set((state) => {
+      const newMessages = { ...state.messages, [agentId]: [] };
+      AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(newMessages));
+      return { messages: newMessages };
     }),
 }));

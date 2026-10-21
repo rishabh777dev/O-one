@@ -5,20 +5,21 @@ interface HostState {
   currentHost: HostInfo;
   availableHosts: HostInfo[];
   setHostMode: (mode: HostMode) => void;
-  updateTelemetry: (pingMs: number) => void;
+  updateTelemetry: (data: Partial<HostInfo>) => void;
 }
 
 export const defaultHost: HostInfo = {
   id: 'azure-vm-main',
-  name: 'Azure VM (24/7)',
+  name: 'Local Host & VM (24/7)',
   specs: 'Standard_B4ms · 4vCPU 16GB',
   tailscaleIp: '100.92.14.8',
-  antigravityVersion: 'v1.4.2 Active',
+  linuxKernel: 'Ubuntu 24.04 (WSL2 Linux 5.15)',
+  antigravityVersion: 'Active',
   hermesPid: 1420,
   diskUsage: '34.2 GB / 128 GB',
   pingMs: 24,
   status: 'connected',
-  mode: 'Azure VM',
+  mode: 'Local PC',
 };
 
 export const useHostStore = create<HostState>((set) => ({
@@ -26,24 +27,25 @@ export const useHostStore = create<HostState>((set) => ({
   availableHosts: [
     defaultHost,
     {
-      id: 'local-laptop',
-      name: 'Work Laptop (Local)',
-      specs: 'M3 Pro / Intel i9 · 32GB',
-      tailscaleIp: '100.92.14.9',
-      antigravityVersion: 'v1.4.2 Standby',
-      hermesPid: 0,
-      diskUsage: '180 GB / 512 GB',
-      pingMs: 4,
-      status: 'standby',
-      mode: 'Local PC',
+      id: 'azure-vm',
+      name: 'Azure VM (Student Plan)',
+      specs: 'Standard_B4ms · Ubuntu 24.04',
+      tailscaleIp: '100.92.14.8',
+      linuxKernel: 'Ubuntu 24.04 LTS (Kernel 6.8)',
+      antigravityVersion: 'Active',
+      hermesPid: 2401,
+      diskUsage: '12 GB / 64 GB',
+      pingMs: 28,
+      status: 'connected',
+      mode: 'Azure VM',
     },
   ],
   setHostMode: (mode) =>
     set((state) => ({
       currentHost: { ...state.currentHost, mode },
     })),
-  updateTelemetry: (pingMs) =>
+  updateTelemetry: (data) =>
     set((state) => ({
-      currentHost: { ...state.currentHost, pingMs },
+      currentHost: { ...state.currentHost, ...data },
     })),
 }));

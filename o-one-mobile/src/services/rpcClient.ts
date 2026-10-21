@@ -35,11 +35,19 @@ class O1RPCClient {
   private ws: WebSocket | null = null;
   private hostUrl: string = getDefaultHostUrl();
   private handlers: Map<string, MessageHandler> = new Map();
+  private telemetryListeners: ((data: any) => void)[] = [];
   private isConnected: boolean = false;
   private reconnectTimer: any = null;
 
   constructor() {
     this.connect();
+  }
+
+  public onTelemetry(cb: (data: any) => void) {
+    this.telemetryListeners.push(cb);
+    return () => {
+      this.telemetryListeners = this.telemetryListeners.filter((l) => l !== cb);
+    };
   }
 
   public setHost(ipOrUrl: string) {
@@ -78,6 +86,11 @@ class O1RPCClient {
       this.ws.onmessage = (event) => {
         try {
           const res: RPCResponse = JSON.parse(event.data as string);
+
+          if (res.type === 'telemetry' && res.data) {
+            this.telemetryListeners.forEach((cb) => cb(res.data));
+          }
+
           if (res.id && this.handlers.has(res.id)) {
             const handler = this.handlers.get(res.id);
             if (handler) handler(res);

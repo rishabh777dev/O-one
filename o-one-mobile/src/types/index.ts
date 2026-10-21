@@ -1,4 +1,4 @@
-export type AppSurface = 'cockpit' | 'ide' | 'workflows' | 'marketplace';
+export type AppSurface = 'cockpit' | 'ide' | 'terminal' | 'workflows' | 'marketplace' | 'builder';
 
 export type HostMode = 'Azure VM' | 'Local PC' | 'Phone';
 
@@ -7,6 +7,7 @@ export interface HostInfo {
   name: string;
   specs: string;
   tailscaleIp: string;
+  linuxKernel: string;
   antigravityVersion: string;
   hermesPid: number;
   diskUsage: string;
@@ -15,13 +16,21 @@ export interface HostInfo {
   mode: HostMode;
 }
 
+export type AgentEngine = 'hermes' | 'antigravity' | 'claude' | 'codex' | 'linux_shell';
+
 export interface Agent {
   id: string;
   name: string;
   role: string;
-  engine: string;
+  systemPrompt: string;
+  engine: AgentEngine;
+  engineLabel: string;
+  model: string;
+  workspacePath: string;
   status: 'ready' | 'thinking' | 'idle';
   capabilities: string[];
+  mcpServers: string[];
+  createdAt: string;
 }
 
 export interface ChatMessage {
@@ -79,10 +88,17 @@ export interface WorkflowItem {
 }
 
 export interface MCPServerItem {
-  id: string;
   name: string;
-  code: string;
-  description: string;
-  installed: boolean;
-  toolCount: number;
+  transport?: string;
+  tools?: string;
+  status: string;
+  description?: string;
+  isCustom?: boolean;
+}
+
+export interface TerminalLog {
+  id: string;
+  type: 'input' | 'stdout' | 'stderr' | 'info';
+  content: string;
+  timestamp: string;
 }

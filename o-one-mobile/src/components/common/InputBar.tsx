@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Modal,
   Text,
+  Alert,
 } from 'react-native';
 import { Plus, Mic, ArrowUp, Terminal, FileCode, CheckCircle2, Trash2, X } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
@@ -21,7 +22,7 @@ export const InputBar: React.FC = () => {
   const { sendMessage } = useAgentStore();
   const { sendProjectInstruction, activeSessionId } = useProjectStore();
 
-  let placeholder = `Message ${activeAgent.name}...`;
+  let placeholder = activeAgent ? `Message ${activeAgent.name}...` : 'Instruct agent...';
   if (currentSurface === 'ide') {
     placeholder = `Instruct Antigravity on ${activeProject}...`;
   } else if (currentSurface === 'workflows') {
@@ -36,9 +37,8 @@ export const InputBar: React.FC = () => {
 
     if (currentSurface === 'ide') {
       sendProjectInstruction(activeProject, activeSessionId, text, selectedEngine);
-    } else {
-      // Default to cockpit / agent conversation
-      sendMessage(activeAgent.id, text);
+    } else if (activeAgent) {
+      sendMessage(activeAgent, text);
     }
 
     setInputText('');
@@ -48,8 +48,8 @@ export const InputBar: React.FC = () => {
     setShowQuickActions(false);
     if (currentSurface === 'ide') {
       sendProjectInstruction(activeProject, activeSessionId, actionText, selectedEngine);
-    } else {
-      sendMessage(activeAgent.id, actionText);
+    } else if (activeAgent) {
+      sendMessage(activeAgent, actionText);
     }
   };
 
@@ -93,7 +93,7 @@ export const InputBar: React.FC = () => {
         ) : (
           <TouchableOpacity
             style={styles.micBtn}
-            onPress={() => alert('Listening for voice prompt... (Hermes Voice)')}
+            onPress={() => Alert.alert('Hermes Voice', 'Listening for voice prompt...')}
             activeOpacity={0.6}
             accessibilityLabel="Voice Input"
           >

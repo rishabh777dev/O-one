@@ -1,0 +1,19 @@
+[
+  {
+    "id": "agent-1792572619469",
+    "name": "Autonomous Agent",
+    "role": "Software Engineer",
+    "systemPrompt": "You are an autonomous AI software engineer. Analyze code, run terminal commands, execute git diffs, and write clean production code.",
+    "engine": "hermes",
+    "engineLabel": "Nous Hermes 3",
+    "model": "gpt-5.6-luna",
+    "workspacePath": "D:\\project\\O one",
+    "status": "ready",
+    "capabilities": [
+      "Terminal",
+      "Code Diff"
+    ],
+    "mcpServers": [],
+    "createdAt": "2026-10-21T08:50:19.469Z"
+  }
+]

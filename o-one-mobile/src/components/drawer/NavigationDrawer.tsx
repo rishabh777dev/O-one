@@ -12,7 +12,17 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, FolderGit2, Play, Grid, Plus, Check } from 'lucide-react-native';
+import {
+  X,
+  FolderGit2,
+  Play,
+  Grid,
+  Plus,
+  Check,
+  Terminal,
+  Trash2,
+  Sparkles,
+} from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { useAppStore } from '../../store/useAppStore';
 import { HostCard } from './HostCard';
@@ -34,22 +44,17 @@ export const NavigationDrawer: React.FC = () => {
     setSurface,
     agents,
     projects,
-    addAgent,
+    deleteAgent,
     addProject,
   } = useAppStore();
 
-  // Local state to keep Modal mounted while animating slide-out
   const [modalVisible, setModalVisible] = useState(isDrawerOpen);
 
   // Animation values: slide strictly from the LEFT edge
   const slideAnim = useRef(new Animated.Value(-SHEET_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Modals state for Add Agent & Add Project
-  const [showAddAgentModal, setShowAddAgentModal] = useState(false);
-  const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentRole, setNewAgentRole] = useState('');
-
+  // Add Project Modal state
   const [showAddProjectModal, setShowAddProjectModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
 
@@ -93,39 +98,26 @@ export const NavigationDrawer: React.FC = () => {
 
   const handleSelectAgent = (agent: Agent) => {
     setActiveAgent(agent);
-    handleClose();
+  };
+
+  const handleOpenBuilder = () => {
+    setSurface('builder');
   };
 
   const handleSelectProject = (project: string) => {
     setActiveProject(project);
-    handleClose();
+  };
+
+  const handleSelectTerminal = () => {
+    setSurface('terminal');
   };
 
   const handleSelectWorkflows = () => {
     setSurface('workflows');
-    handleClose();
   };
 
   const handleSelectMarketplace = () => {
     setSurface('marketplace');
-    handleClose();
-  };
-
-  const handleCreateAgent = () => {
-    if (!newAgentName.trim()) return;
-    const newAg: Agent = {
-      id: `agent-${Date.now()}`,
-      name: newAgentName.trim(),
-      role: newAgentRole.trim() || 'Autonomous Assistant',
-      engine: 'Nous Hermes 3 + Antigravity CLI',
-      status: 'ready',
-      capabilities: ['Terminal', 'GitHub MCP', 'Code Diff'],
-    };
-    addAgent(newAg);
-    setNewAgentName('');
-    setNewAgentRole('');
-    setShowAddAgentModal(false);
-    handleClose();
   };
 
   const handleCreateProject = () => {
@@ -133,7 +125,6 @@ export const NavigationDrawer: React.FC = () => {
     addProject(newProjectName.trim().toLowerCase());
     setNewProjectName('');
     setShowAddProjectModal(false);
-    handleClose();
   };
 
   if (!modalVisible) return null;
@@ -190,69 +181,178 @@ export const NavigationDrawer: React.FC = () => {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* 1. Autonomous Agents */}
+            {/* 1. Custom Autonomous Agents (Blank Slate Ready) */}
             <View style={styles.groupContainer}>
               <View style={styles.groupLabelRow}>
-                <Text style={styles.groupLabel}>Autonomous Agents</Text>
+                <Text style={styles.groupLabel}>Autonomous Agents ({agents.length})</Text>
                 <TouchableOpacity
-                  onPress={() => setShowAddAgentModal(true)}
+                  onPress={handleOpenBuilder}
                   style={styles.plusPill}
                   activeOpacity={0.7}
                 >
                   <Plus size={11} color={colors.hermesOrange} />
-                  <Text style={styles.groupAction}>New</Text>
+                  <Text style={styles.groupAction}>New Agent</Text>
                 </TouchableOpacity>
               </View>
 
-              {agents.map((agent) => {
-                const isActive = currentSurface === 'cockpit' && activeAgent.id === agent.id;
-                return (
-                  <TouchableOpacity
-                    key={agent.id}
-                    style={[styles.pillItem, isActive && styles.pillItemActive]}
-                    onPress={() => handleSelectAgent(agent)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.itemLeft}>
-                      <View
-                        style={[
-                          styles.dot,
-                          {
-                            backgroundColor:
-                              agent.status === 'ready'
-                                ? colors.accentEmerald
-                                : colors.textMuted,
-                          },
-                        ]}
-                      />
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.itemTitle, isActive && styles.itemTitleActive]}
-                          numberOfLines={1}
-                        >
-                          {agent.name}
-                        </Text>
-                        <Text style={styles.itemRoleText} numberOfLines={1}>
-                          {agent.role}
-                        </Text>
+              {agents.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.blankSlateCard}
+                  onPress={handleOpenBuilder}
+                  activeOpacity={0.7}
+                >
+                  <Sparkles size={16} color={colors.hermesOrange} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.blankSlateTitle}>No Agents Created Yet</Text>
+                    <Text style={styles.blankSlateSub}>Tap here to build your first agent</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                agents.map((agent) => {
+                  const isActive =
+                    currentSurface === 'cockpit' && activeAgent && activeAgent.id === agent.id;
+                  return (
+                    <TouchableOpacity
+                      key={agent.id}
+                      style={[styles.pillItem, isActive && styles.pillItemActive]}
+                      onPress={() => handleSelectAgent(agent)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.itemLeft}>
+                        <View
+                          style={[
+                            styles.dot,
+                            {
+                              backgroundColor:
+                                agent.status === 'ready'
+                                  ? colors.accentEmerald
+                                  : colors.textMuted,
+                            },
+                          ]}
+                        />
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[styles.itemTitle, isActive && styles.itemTitleActive]}
+                            numberOfLines={1}
+                          >
+                            {agent.name}
+                          </Text>
+                          <Text style={styles.itemRoleText} numberOfLines={1}>
+                            {agent.engineLabel} · {agent.model}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
-                    {isActive ? (
-                      <Check size={14} color={colors.accentEmerald} />
-                    ) : (
-                      <Text style={styles.itemSubText}>
-                        {agent.status === 'ready' ? 'Ready' : 'Idle'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
+
+                      <View style={styles.itemRightRow}>
+                        {isActive ? (
+                          <Check size={14} color={colors.accentEmerald} />
+                        ) : null}
+                        <TouchableOpacity
+                          onPress={() => deleteAgent(agent.id)}
+                          style={styles.deleteBtn}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Trash2 size={12} color={colors.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
             </View>
 
-            {/* 2. Projects & Workspaces */}
+            {/* 2. Tools & Shells (Real Linux Kernel & MCP) */}
             <View style={styles.groupContainer}>
               <View style={styles.groupLabelRow}>
-                <Text style={styles.groupLabel}>Projects & Repos</Text>
+                <Text style={styles.groupLabel}>Kernel, MCP & Tools</Text>
+              </View>
+
+              {/* Linux Terminal Item */}
+              <TouchableOpacity
+                style={[styles.pillItem, currentSurface === 'terminal' && styles.pillItemActive]}
+                onPress={handleSelectTerminal}
+                activeOpacity={0.7}
+              >
+                <View style={styles.itemLeft}>
+                  <Terminal
+                    size={15}
+                    color={currentSurface === 'terminal' ? colors.accentEmerald : '#9CA3AF'}
+                    strokeWidth={2}
+                  />
+                  <View>
+                    <Text
+                      style={[
+                        styles.itemTitle,
+                        currentSurface === 'terminal' && styles.itemTitleActive,
+                      ]}
+                    >
+                      Linux Kernel & CLI
+                    </Text>
+                    <Text style={styles.itemRoleText}>Ubuntu 24.04 WSL2 · Bash / PS</Text>
+                  </View>
+                </View>
+                <Text style={[styles.itemSubText, { color: colors.accentEmerald }]}>Ready</Text>
+              </TouchableOpacity>
+
+              {/* MCP Hub Item */}
+              <TouchableOpacity
+                style={[
+                  styles.pillItem,
+                  currentSurface === 'marketplace' && styles.pillItemActive,
+                ]}
+                onPress={handleSelectMarketplace}
+                activeOpacity={0.7}
+              >
+                <View style={styles.itemLeft}>
+                  <Grid
+                    size={15}
+                    color={currentSurface === 'marketplace' ? colors.hermesOrange : '#9CA3AF'}
+                    strokeWidth={2}
+                  />
+                  <View>
+                    <Text
+                      style={[
+                        styles.itemTitle,
+                        currentSurface === 'marketplace' && styles.itemTitleActive,
+                      ]}
+                    >
+                      MCP Hub & Connectors
+                    </Text>
+                    <Text style={styles.itemRoleText}>Connect any stdio or SSE server</Text>
+                  </View>
+                </View>
+                <Text style={styles.itemSubText}>68+ Tools</Text>
+              </TouchableOpacity>
+
+              {/* Visual Workflows Item */}
+              <TouchableOpacity
+                style={[styles.pillItem, currentSurface === 'workflows' && styles.pillItemActive]}
+                onPress={handleSelectWorkflows}
+                activeOpacity={0.7}
+              >
+                <View style={styles.itemLeft}>
+                  <Play
+                    size={14}
+                    color={currentSurface === 'workflows' ? colors.accentEmerald : '#9CA3AF'}
+                    strokeWidth={2}
+                  />
+                  <Text
+                    style={[
+                      styles.itemTitle,
+                      currentSurface === 'workflows' && styles.itemTitleActive,
+                    ]}
+                  >
+                    Visual Workflows
+                  </Text>
+                </View>
+                <Text style={[styles.itemSubText, { color: colors.accentEmerald }]}>Active</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 3. Projects & Workspaces */}
+            <View style={styles.groupContainer}>
+              <View style={styles.groupLabelRow}>
+                <Text style={styles.groupLabel}>Workspaces & Repos</Text>
                 <TouchableOpacity
                   onPress={() => setShowAddProjectModal(true)}
                   style={styles.plusPill}
@@ -294,62 +394,6 @@ export const NavigationDrawer: React.FC = () => {
                 );
               })}
             </View>
-
-            {/* 3. Visual Workflows & MCP Hub */}
-            <View style={styles.groupContainer}>
-              <View style={styles.groupLabelRow}>
-                <Text style={styles.groupLabel}>Tools & Automation</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[styles.pillItem, currentSurface === 'workflows' && styles.pillItemActive]}
-                onPress={handleSelectWorkflows}
-                activeOpacity={0.7}
-              >
-                <View style={styles.itemLeft}>
-                  <Play
-                    size={14}
-                    color={currentSurface === 'workflows' ? colors.accentEmerald : '#9CA3AF'}
-                    strokeWidth={2}
-                  />
-                  <Text
-                    style={[
-                      styles.itemTitle,
-                      currentSurface === 'workflows' && styles.itemTitleActive,
-                    ]}
-                  >
-                    Visual Workflows
-                  </Text>
-                </View>
-                <Text style={[styles.itemSubText, { color: colors.accentEmerald }]}>2 Active</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.pillItem,
-                  currentSurface === 'marketplace' && styles.pillItemActive,
-                ]}
-                onPress={handleSelectMarketplace}
-                activeOpacity={0.7}
-              >
-                <View style={styles.itemLeft}>
-                  <Grid
-                    size={14}
-                    color={currentSurface === 'marketplace' ? colors.hermesOrange : '#9CA3AF'}
-                    strokeWidth={2}
-                  />
-                  <Text
-                    style={[
-                      styles.itemTitle,
-                      currentSurface === 'marketplace' && styles.itemTitleActive,
-                    ]}
-                  >
-                    MCP Hub & Tools
-                  </Text>
-                </View>
-                <Text style={styles.itemSubText}>4 Connectors</Text>
-              </TouchableOpacity>
-            </View>
           </ScrollView>
 
           {/* Lower Section: Real Host Manager */}
@@ -364,60 +408,16 @@ export const NavigationDrawer: React.FC = () => {
         </TouchableWithoutFeedback>
       </View>
 
-      {/* Add Agent Modal */}
-      <Modal visible={showAddAgentModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create Specialized Agent</Text>
-            <Text style={styles.modalSubtitle}>Powered by local Hermes & Antigravity CLI</Text>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Agent Name (e.g. Sentry Bug Hunter)"
-              placeholderTextColor={colors.textMuted}
-              value={newAgentName}
-              onChangeText={setNewAgentName}
-              autoFocus
-            />
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Role / Purpose (e.g. Auto-triages crash logs)"
-              placeholderTextColor={colors.textMuted}
-              value={newAgentRole}
-              onChangeText={setNewAgentRole}
-            />
-
-            <View style={styles.modalBtnRow}>
-              <TouchableOpacity
-                style={styles.btnModalPrimary}
-                onPress={handleCreateAgent}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.btnModalPrimaryText}>Create Agent</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.btnModalCancel}
-                onPress={() => setShowAddAgentModal(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.btnModalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Add Project Modal */}
       <Modal visible={showAddProjectModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Add Project Workspace</Text>
-            <Text style={styles.modalSubtitle}>Link folder on your Azure VM / local machine</Text>
+            <Text style={styles.modalSubtitle}>Link folder on your host machine / Azure VM</Text>
 
             <TextInput
               style={styles.modalInput}
-              placeholder="Project Name (e.g. api-backend)"
+              placeholder="Project Name / Path (e.g. cadence)"
               placeholderTextColor={colors.textMuted}
               value={newProjectName}
               onChangeText={setNewProjectName}
@@ -547,6 +547,27 @@ const styles = StyleSheet.create({
     color: colors.hermesOrange,
     fontWeight: '600',
   },
+  blankSlateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    backgroundColor: colors.bgCard,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(249, 115, 22, 0.4)',
+    borderRadius: 16,
+  },
+  blankSlateTitle: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  blankSlateSub: {
+    fontSize: 10.5,
+    color: colors.hermesOrange,
+    marginTop: 2,
+  },
   pillItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -584,14 +605,23 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   itemRoleText: {
-    fontSize: 10.5,
+    fontSize: 10,
     color: colors.textMuted,
     marginTop: 1,
+    fontFamily: 'monospace',
+  },
+  itemRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   itemSubText: {
     fontSize: 10.5,
     fontFamily: 'monospace',
     color: colors.textMuted,
+  },
+  deleteBtn: {
+    padding: 4,
   },
   lowerSection: {
     padding: 12,

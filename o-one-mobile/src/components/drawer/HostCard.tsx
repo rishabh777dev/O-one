@@ -87,6 +87,13 @@ export const HostCard: React.FC = () => {
           </View>
 
           <View style={styles.row}>
+            <Text style={styles.label}>Linux Kernel</Text>
+            <Text style={[styles.value, { color: colors.accentEmerald }]}>
+              {currentHost.linuxKernel}
+            </Text>
+          </View>
+
+          <View style={styles.row}>
             <Text style={styles.label}>Tailscale IP</Text>
             <Text style={styles.value}>{currentHost.tailscaleIp}</Text>
           </View>
