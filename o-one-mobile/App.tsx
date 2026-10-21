@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from './src/theme/colors';
@@ -38,13 +38,20 @@ export default function App() {
         {/* Global Chief Header */}
         <Header />
 
-        {/* Active Surface (100% full height - zero bottom tab clutter) */}
-        <View style={styles.surfaceContainer}>{renderCurrentSurface()}</View>
+        {/* Keyboard-aware cockpit surface and input bar */}
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+          {/* Active Surface */}
+          <View style={styles.surfaceContainer}>{renderCurrentSurface()}</View>
 
-        {/* Pure Bottom Input Bar */}
-        <InputBar />
+          {/* Pure Bottom Input Bar */}
+          <InputBar />
+        </KeyboardAvoidingView>
 
-        {/* All-in-Slider Navigation Drawer */}
+        {/* Left-Side Slider Navigation Drawer */}
         <NavigationDrawer />
       </SafeAreaView>
     </SafeAreaProvider>
@@ -55,6 +62,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgScreen,
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   surfaceContainer: {
     flex: 1,

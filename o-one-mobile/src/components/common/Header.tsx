@@ -1,12 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ChevronLeft, Monitor } from 'lucide-react-native';
+import { Menu, Monitor } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { useAppStore } from '../../store/useAppStore';
 
 export const Header: React.FC = () => {
-  const { currentSurface, activeAgent, activeProject, openDrawer, toggleHostExpanded } =
-    useAppStore();
+  const {
+    currentSurface,
+    activeAgent,
+    activeProject,
+    openDrawer,
+    toggleHostExpanded,
+    isHostExpanded,
+  } = useAppStore();
 
   const isIDE = currentSurface === 'ide';
   const isWorkflows = currentSurface === 'workflows';
@@ -28,18 +34,21 @@ export const Header: React.FC = () => {
 
   const handleOpenHost = () => {
     openDrawer();
-    toggleHostExpanded();
+    if (!isHostExpanded) {
+      toggleHostExpanded();
+    }
   };
 
   return (
     <View style={styles.headerContainer}>
-      {/* Left Circular Drawer / Back Button */}
+      {/* Left Slider / Drawer Trigger Button */}
       <TouchableOpacity
         style={styles.circleBtn}
         onPress={openDrawer}
         activeOpacity={0.7}
+        accessibilityLabel="Open Navigation Drawer"
       >
-        <ChevronLeft size={20} color="#FFFFFF" strokeWidth={2.4} />
+        <Menu size={18} color="#FFFFFF" strokeWidth={2.2} />
       </TouchableOpacity>
 
       {/* Center Agent / Surface Pill with Nous Badge */}
@@ -47,6 +56,7 @@ export const Header: React.FC = () => {
         style={styles.centerPill}
         onPress={openDrawer}
         activeOpacity={0.8}
+        accessibilityLabel="Switch Agent or Project"
       >
         <View style={styles.nousBadge}>
           <View style={styles.nousDot} />
@@ -69,6 +79,7 @@ export const Header: React.FC = () => {
         style={styles.circleBtn}
         onPress={handleOpenHost}
         activeOpacity={0.7}
+        accessibilityLabel="Host Connection Manager"
       >
         <Monitor size={17} color="#FFFFFF" strokeWidth={2} />
       </TouchableOpacity>
@@ -78,12 +89,14 @@ export const Header: React.FC = () => {
 
 const styles = StyleSheet.create({
   headerContainer: {
-    height: 56,
+    height: 54,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.bgScreen,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
     zIndex: 30,
   },
   circleBtn: {
@@ -99,40 +112,33 @@ const styles = StyleSheet.create({
   centerPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#222226',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: colors.bgCard,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 9999,
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    paddingLeft: 6,
-    gap: 8,
+    maxWidth: '65%',
   },
   nousBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.hermesOrange,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 3,
+    gap: 2.5,
   },
   nousDot: {
-    width: 3.5,
-    height: 8,
-    backgroundColor: '#000000',
+    width: 4,
+    height: 4,
     borderRadius: 2,
+    backgroundColor: colors.hermesOrange,
   },
   titleColumn: {
-    flexDirection: 'column',
     alignItems: 'flex-start',
   },
   agentTitle: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 12.5,
+    fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 16,
+    letterSpacing: -0.2,
   },
   statusRow: {
     flexDirection: 'row',
@@ -148,6 +154,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 10,
-    color: colors.textSecondary,
+    color: colors.textMuted,
+    fontFamily: 'monospace',
   },
 });

@@ -8,11 +8,15 @@ interface AppState {
   isDrawerOpen: boolean;
   isHostExpanded: boolean;
   selectedEngine: string;
+  agents: Agent[];
+  projects: string[];
 
   // Actions
   setSurface: (surface: AppSurface) => void;
   setActiveAgent: (agent: Agent) => void;
   setActiveProject: (project: string) => void;
+  addAgent: (agent: Agent) => void;
+  addProject: (project: string) => void;
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleDrawer: () => void;
@@ -54,6 +58,8 @@ export const useAppStore = create<AppState>((set) => ({
   isDrawerOpen: false,
   isHostExpanded: false,
   selectedEngine: 'Antigravity CLI · High',
+  agents: initialAgents,
+  projects: ['cadence', 'o-one', 'stripe-gateway'],
 
   setSurface: (surface) => set({ currentSurface: surface, isDrawerOpen: false }),
   setActiveAgent: (agent) =>
@@ -68,6 +74,20 @@ export const useAppStore = create<AppState>((set) => ({
       currentSurface: 'ide',
       isDrawerOpen: false,
     }),
+  addAgent: (agent) =>
+    set((state) => ({
+      agents: [...state.agents, agent],
+      activeAgent: agent,
+      currentSurface: 'cockpit',
+      isDrawerOpen: false,
+    })),
+  addProject: (project) =>
+    set((state) => ({
+      projects: [...state.projects, project],
+      activeProject: project,
+      currentSurface: 'ide',
+      isDrawerOpen: false,
+    })),
   openDrawer: () => set({ isDrawerOpen: true }),
   closeDrawer: () => set({ isDrawerOpen: false }),
   toggleDrawer: () => set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
