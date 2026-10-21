@@ -13,9 +13,7 @@ export const CockpitScreen: React.FC = () => {
   const { messages, resolveActionCard, sendMessage } = useAgentStore();
   const scrollViewRef = useRef<ScrollView>(null);
 
-  if (!activeAgent) return null;
-
-  const agentMessages = messages[activeAgent.id] || [];
+  const agentMessages = activeAgent ? messages[activeAgent.id] || [] : [];
 
   // Auto-scroll to bottom whenever messages update
   useEffect(() => {
@@ -24,6 +22,8 @@ export const CockpitScreen: React.FC = () => {
     }, 100);
     return () => clearTimeout(timer);
   }, [agentMessages]);
+
+  if (!activeAgent) return null;
 
   const handleStarterPrompt = (prompt: string) => {
     sendMessage(activeAgent, prompt);
