@@ -1,9 +1,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import { spawn, exec } from 'child_process';
+import { spawn, exec, execSync } from 'child_process';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
+import sqlite from 'node:sqlite';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8443;
 const wss = new WebSocketServer({ port: PORT });
@@ -14,6 +15,66 @@ const isWin = os.platform() === 'win32';
 const hermesBin = isWin ? 'hermes.cmd' : 'hermes';
 const DATA_DIR = path.join(__dirname, 'data');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
+
+const HERMES_DB_PATH = path.join(
+  process.env.USERPROFILE || 'C:\\Users\\risha',
+  'AppData',
+  'Local',
+  'hermes',
+  'state.db'
+);
+
+let hermesDbInstance: any = null;
+function getHermesDb() {
+  if (hermesDbInstance) return hermesDbInstance;
+  try {
+    if (fs.existsSync(HERMES_DB_PATH)) {
+      hermesDbInstance = new (sqlite as any).DatabaseSync(HERMES_DB_PATH, { readOnly: true });
+      console.log(`[O1 Host Daemon] Connected to Hermes session state.db at ${HERMES_DB_PATH}`);
+    }
+  } catch (err: any) {
+    console.warn('[O1 Host Daemon] Note: could not open state.db:', err.message);
+  }
+  return hermesDbInstance;
+}
+
+let hermesRuntimeBin: string = hermesBin;
+let hermesRuntimePrefixArgs: string[] = [];
+let hermesUseShell: boolean = isWin;
+
+// Resolve direct runtime command to bypass Windows cmd.exe argument mangling
+function initHermesRuntime() {
+  try {
+    const raw = execSync(`${hermesBin} --print-runtime-command`, { encoding: 'utf-8' }).trim();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      hermesRuntimeBin = parsed[0];
+      hermesRuntimePrefixArgs = parsed.slice(1);
+      hermesUseShell = false; // Direct execution avoids cmd.exe splitting multi-word queries
+      console.log(`[O1 Host Daemon] Resolved direct Hermes runtime: ${hermesRuntimeBin}`);
+    }
+  } catch (err: any) {
+    console.warn('[O1 Host Daemon] Note: using default hermesBin:', err.message);
+  }
+}
+initHermesRuntime();
+
+let activeHermesModel = 'gpt-5.6-luna';
+let activeHermesProvider = 'ChatGPT or Codex Subscription';
+
+function updateHermesMetadata() {
+  exec(`${hermesBin} status`, (err, stdout) => {
+    if (!err && stdout) {
+      const modelMatch = stdout.match(/Model:\s+([^\r\n]+)/);
+      if (modelMatch) activeHermesModel = modelMatch[1].trim();
+
+      const providerMatch = stdout.match(/Provider:\s+([^\r\n]+)/);
+      if (providerMatch) activeHermesProvider = providerMatch[1].trim();
+    }
+    console.log(`[O1 Host Daemon] Hermes Active: ${activeHermesModel} (${activeHermesProvider})`);
+  });
+}
+updateHermesMetadata();
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -45,48 +106,40 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
+let cachedLinuxKernel = 'Linux Kernel Ready';
+try {
+  exec('wsl uname -r', (wslErr, wslStdout) => {
+    if (!wslErr && wslStdout) {
+      cachedLinuxKernel = `Linux ${wslStdout.trim()} (WSL2 Ubuntu 24.04)`;
+    }
+  });
+} catch {}
+
 function pushTelemetry(ws: WebSocket) {
+  if (ws.readyState !== WebSocket.OPEN) return;
   const cpus = os.cpus();
   const totalMem = Math.round(os.totalmem() / (1024 * 1024 * 1024));
   const freeMem = Math.round(os.freemem() / (1024 * 1024 * 1024));
 
-  // Check WSL Linux Kernel
-  exec('wsl uname -r', (wslErr, wslStdout) => {
-    const linuxKernel = !wslErr && wslStdout ? wslStdout.trim() : null;
-
-    exec(`${hermesBin} status`, (err, stdout) => {
-      let hermesModel = 'gpt-5.6-luna';
-      let hermesProvider = 'ChatGPT / Codex Subscription';
-
-      if (!err && stdout) {
-        const modelMatch = stdout.match(/Model:\s+([^\r\n]+)/);
-        if (modelMatch) hermesModel = modelMatch[1].trim();
-
-        const providerMatch = stdout.match(/Provider:\s+([^\r\n]+)/);
-        if (providerMatch) hermesProvider = providerMatch[1].trim();
-      }
-
-      ws.send(
-        JSON.stringify({
-          type: 'telemetry',
-          data: {
-            hostname: os.hostname(),
-            platform: os.platform(),
-            linuxKernel: linuxKernel ? `Linux ${linuxKernel} (WSL2 Ubuntu 24.04)` : 'Linux Kernel Ready',
-            cpus: cpus.length,
-            memory: `${totalMem - freeMem} GB / ${totalMem} GB`,
-            hermes: {
-              installed: !err,
-              model: hermesModel,
-              provider: hermesProvider,
-              daemonPid: process.pid,
-            },
-            antigravityCli: 'Active',
-          },
-        })
-      );
-    });
-  });
+  ws.send(
+    JSON.stringify({
+      type: 'telemetry',
+      data: {
+        hostname: os.hostname(),
+        platform: os.platform(),
+        linuxKernel: cachedLinuxKernel,
+        cpus: cpus.length,
+        memory: `${totalMem - freeMem} GB / ${totalMem} GB`,
+        hermes: {
+          installed: true,
+          model: activeHermesModel,
+          provider: activeHermesProvider,
+          daemonPid: process.pid,
+        },
+        antigravityCli: 'Active',
+      },
+    })
+  );
 }
 
 function handleRPC(ws: WebSocket, req: RPCRequest) {
@@ -103,19 +156,38 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       const model = params.model;
       const systemPrompt = params.systemPrompt;
 
-      const args = ['chat', '-q', query, '--format', 'stream-json', '-Q'];
-      if (sessionId) {
-        args.push('--resume', sessionId);
+      // Smart Model Resolution:
+      // If host Hermes uses ChatGPT or Codex Subscription, hermes-3 llama models are rejected by OpenAI HTTP 400.
+      // Automatically fallback to the active Codex model (e.g. gpt-5.6-luna) unless user explicitly specified a Codex model.
+      let effectiveModel = model;
+      const isCodexProvider =
+        activeHermesProvider.toLowerCase().includes('chatgpt') ||
+        activeHermesProvider.toLowerCase().includes('codex');
+
+      if (isCodexProvider) {
+        if (!effectiveModel || effectiveModel.includes('hermes-3') || effectiveModel.includes('llama')) {
+          effectiveModel = activeHermesModel || 'gpt-5.6-luna';
+        }
       }
-      if (model) {
-        args.push('-m', model);
+
+      let promptText = query;
+      if (systemPrompt && systemPrompt.trim() && !sessionId) {
+        promptText = `[System Instructions: ${systemPrompt.trim()}]\n\nUser: ${query}`;
+      }
+
+      const hermesArgs = [...hermesRuntimePrefixArgs, 'chat', '-q', promptText, '--format', 'stream-json', '-Q'];
+      if (sessionId) {
+        hermesArgs.push('--resume', sessionId);
+      }
+      if (effectiveModel) {
+        hermesArgs.push('-m', effectiveModel);
       }
       if (systemPrompt) {
         // Can be passed or injected into query
       }
 
-      console.log(`[O1 Host Daemon] Spawning: ${hermesBin} ${args.join(' ')}`);
-      const child = spawn(hermesBin, args, { cwd, shell: true });
+      console.log(`[O1 Host Daemon] Spawning: ${hermesRuntimeBin} ${hermesArgs.slice(hermesRuntimePrefixArgs.length).join(' ')}`);
+      const child = spawn(hermesRuntimeBin, hermesArgs, { cwd, shell: hermesUseShell });
 
       const rl = readline.createInterface({ input: child.stdout });
 
@@ -127,28 +199,138 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
           } else if (evt.type === 'system') {
             ws.send(JSON.stringify({ id, type: 'system', data: evt }));
           } else if (evt.type === 'result') {
+            let sessionTitle = '';
+            try {
+              const db = getHermesDb();
+              if (db && evt.session_id) {
+                const row = db.prepare('SELECT title FROM sessions WHERE id = ?').get(evt.session_id) as any;
+                if (row && row.title) sessionTitle = row.title;
+              }
+            } catch {}
+
             ws.send(
               JSON.stringify({
                 id,
                 type: 'done',
                 result: evt.text,
                 sessionId: evt.session_id,
+                sessionTitle,
                 tokens: evt.tokens,
               })
             );
           }
         } catch {
-          ws.send(JSON.stringify({ id, type: 'stdout', data: line }));
+          // Filter out CLI banners and non-JSON output so they never pollute chat text
+          if (
+            line.includes('Resumed session') ||
+            line.includes('session_id:') ||
+            line.startsWith('Warning:') ||
+            line.includes('kanban-worker-exit')
+          ) {
+            console.log(`[O1 Host Daemon] Filtered Hermes CLI banner: ${line.trim()}`);
+            if (line.includes('Resumed session')) {
+              const match = line.match(/Resumed session\s+([^\s"]+)(?:\s+"([^"]+)")?/);
+              if (match) {
+                ws.send(
+                  JSON.stringify({
+                    id,
+                    type: 'session_info',
+                    sessionId: match[1],
+                    sessionTitle: match[2] || '',
+                  })
+                );
+              }
+            }
+            return;
+          }
+          console.log(`[O1 Host Daemon] Hermes stdout (raw): ${line.trim()}`);
         }
       });
 
       child.stderr.on('data', (data) => {
-        ws.send(JSON.stringify({ id, type: 'stderr', data: data.toString() }));
+        const text = data.toString();
+        // Ignore non-fatal CLI warnings, banner text, and session ids
+        if (
+          text.includes('DeprecationWarning') ||
+          text.includes('session_id:') ||
+          text.includes('Resumed session') ||
+          text.includes('Warning: Unknown toolsets')
+        ) {
+          console.log(`[O1 Host Daemon] Hermes CLI stderr (diagnostic): ${text.trim()}`);
+          return;
+        }
+        ws.send(JSON.stringify({ id, type: 'stderr', data: text }));
       });
 
       child.on('close', (code) => {
         ws.send(JSON.stringify({ id, type: 'process_exit', exitCode: code }));
       });
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // 1b. HERMES SESSION MANAGEMENT (REAL state.db INTEGRATION)
+    // -------------------------------------------------------------
+    case 'hermes.sessions.list': {
+      try {
+        const limit = params.limit || 30;
+        const db = getHermesDb();
+        if (!db) {
+          ws.send(JSON.stringify({ id, type: 'result', sessions: [] }));
+          break;
+        }
+        const rows = db.prepare(`
+          SELECT id, title, started_at, message_count, cwd, model
+          FROM sessions
+          ORDER BY started_at DESC
+          LIMIT ?
+        `).all(limit);
+
+        ws.send(JSON.stringify({ id, type: 'result', sessions: rows }));
+      } catch (err: any) {
+        console.error('[O1 Host Daemon] hermes.sessions.list error:', err);
+        ws.send(JSON.stringify({ id, type: 'error', error: err.message, sessions: [] }));
+      }
+      break;
+    }
+
+    case 'hermes.sessions.messages': {
+      const sessionId = params.sessionId;
+      try {
+        const db = getHermesDb();
+        if (!db || !sessionId) {
+          ws.send(JSON.stringify({ id, type: 'result', messages: [] }));
+          break;
+        }
+        const rows = db.prepare(`
+          SELECT id, role, content
+          FROM messages
+          WHERE session_id = ? AND role IN ('user', 'assistant')
+          ORDER BY id ASC
+        `).all(sessionId);
+
+        // Sanitize out any system instructions prefix from user message if injected
+        const cleaned = (rows as any[]).map((m) => {
+          let text = m.content || '';
+          if (m.role === 'user' && text.startsWith('[System Instructions:')) {
+            const splitIdx = text.indexOf('\n\nUser: ');
+            if (splitIdx !== -1) {
+              text = text.substring(splitIdx + 8);
+            }
+          }
+          return {
+            id: `hermes-${m.id}`,
+            sender: m.role === 'user' ? 'user' : 'agent',
+            content: text,
+            timestamp: '',
+          };
+        });
+
+        ws.send(JSON.stringify({ id, type: 'result', messages: cleaned }));
+      } catch (err: any) {
+        console.error('[O1 Host Daemon] hermes.sessions.messages error:', err);
+        ws.send(JSON.stringify({ id, type: 'error', error: err.message, messages: [] }));
+      }
       break;
     }
 
@@ -159,10 +341,10 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       const prompt = params.prompt || '';
       const cwd = params.cwd || process.cwd();
 
-      // Spawn Antigravity CLI or Hermes in Antigravity mode
+      // Spawn Antigravity CLI without shell: true to preserve exact arguments
       const child = spawn('agy.EXE', ['-p', prompt, '--dangerously-skip-permissions'], {
         cwd,
-        shell: true,
+        shell: false,
       });
 
       child.stdout.on('data', (data) => {
@@ -452,6 +634,98 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       } catch (err: any) {
         ws.send(JSON.stringify({ id, result: [] }));
       }
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // 13. DYNAMIC MODELS & PROVIDERS FROM HOST
+    // -------------------------------------------------------------
+    case 'models.list': {
+      exec(`${hermesBin} status`, (err, stdout) => {
+        let detectedModel = activeHermesModel;
+        let detectedProvider = activeHermesProvider;
+
+        if (!err && stdout) {
+          const modelMatch = stdout.match(/Model:\s+([^\r\n]+)/);
+          if (modelMatch) detectedModel = modelMatch[1].trim();
+
+          const providerMatch = stdout.match(/Provider:\s+([^\r\n]+)/);
+          if (providerMatch) detectedProvider = providerMatch[1].trim();
+        }
+
+        const groups = [
+          {
+            provider: `Hermes Engine (${detectedProvider})`,
+            engine: 'hermes',
+            models: [
+              {
+                id: detectedModel,
+                name: `${detectedModel} (Active)`,
+                desc: `Currently active on host (${detectedProvider})`,
+              },
+              {
+                id: 'gpt-4o',
+                name: 'GPT-4o (Codex)',
+                desc: 'Fast multimodal code and tool reasoning',
+              },
+              {
+                id: 'gpt-4o-mini',
+                name: 'GPT-4o Mini',
+                desc: 'Fast, lightweight tool execution',
+              },
+              {
+                id: 'o1',
+                name: 'OpenAI o1',
+                desc: 'Deep chain-of-thought algorithmic reasoning',
+              },
+              {
+                id: 'o1-mini',
+                name: 'OpenAI o1-mini',
+                desc: 'Reasoning model specialized in code synthesis',
+              },
+            ],
+          },
+          {
+            provider: 'Antigravity CLI ACP',
+            engine: 'antigravity',
+            models: [
+              {
+                id: 'gemini-2.5-pro',
+                name: 'Gemini 2.5 Pro (Antigravity)',
+                desc: 'Autonomous multi-file planning, git diffs & code execution',
+              },
+              {
+                id: 'gemini-2.5-flash',
+                name: 'Gemini 2.5 Flash',
+                desc: 'Sub-second tool latency and instant code edits',
+              },
+            ],
+          },
+          {
+            provider: 'OpenRouter (Multi-Provider)',
+            engine: 'openrouter',
+            models: [
+              {
+                id: 'deepseek/deepseek-chat',
+                name: 'DeepSeek-V3',
+                desc: '671B MoE architecture with exceptional code ability',
+              },
+              {
+                id: 'deepseek/deepseek-r1',
+                name: 'DeepSeek-R1 (Reasoning)',
+                desc: 'Mathematical and algorithmic synthesis',
+              },
+              {
+                id: 'anthropic/claude-3.7-sonnet',
+                name: 'Claude 3.7 Sonnet',
+                desc: 'Hybrid reasoning and deep codebase exploration',
+              },
+            ],
+          },
+        ];
+
+        ws.send(JSON.stringify({ id, result: groups }));
+      });
       break;
     }
 

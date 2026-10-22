@@ -8,6 +8,7 @@ import {
   Text,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, Mic, ArrowUp, Terminal, FileCode, CheckCircle2, Trash2, X } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { useAppStore } from '../../store/useAppStore';
@@ -15,6 +16,7 @@ import { useAgentStore } from '../../store/useAgentStore';
 import { useProjectStore } from '../../store/useProjectStore';
 
 export const InputBar: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [inputText, setInputText] = useState('');
   const [showQuickActions, setShowQuickActions] = useState(false);
 
@@ -22,7 +24,7 @@ export const InputBar: React.FC = () => {
   const { sendMessage } = useAgentStore();
   const { sendProjectInstruction, activeSessionId } = useProjectStore();
 
-  let placeholder = activeAgent ? `Message ${activeAgent.name}...` : 'Instruct agent...';
+  let placeholder = activeAgent ? `Ask ${activeAgent.name}` : 'Ask agent...';
   if (currentSurface === 'ide') {
     placeholder = `Instruct Antigravity on ${activeProject}...`;
   } else if (currentSurface === 'workflows') {
@@ -56,23 +58,25 @@ export const InputBar: React.FC = () => {
   const hasContent = inputText.trim().length > 0;
 
   return (
-    <View style={styles.container}>
-      {/* Plus Action Button */}
-      <TouchableOpacity
-        style={styles.plusBtn}
-        onPress={() => setShowQuickActions(true)}
-        activeOpacity={0.7}
-        accessibilityLabel="Quick Actions"
-      >
-        <Plus size={19} color="#FFFFFF" strokeWidth={2.4} />
-      </TouchableOpacity>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) + 4 }]}>
+      {/* Unified Capsule Pill matching dense_010 */}
+      <View style={styles.inputCapsule}>
+        {/* Plus Action Button inside Capsule */}
+        <TouchableOpacity
+          style={styles.plusBtn}
+          onPress={() => setShowQuickActions(true)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Quick Actions"
+        >
+          <Plus size={20} color="#9CA3AF" strokeWidth={2.4} />
+        </TouchableOpacity>
 
-      {/* Input Pill Field */}
-      <View style={styles.inputPill}>
+        {/* Input Pill Field */}
         <TextInput
           style={styles.textInput}
           placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor="#71717A"
           value={inputText}
           onChangeText={setInputText}
           onSubmitEditing={handleSend}
@@ -95,9 +99,10 @@ export const InputBar: React.FC = () => {
             style={styles.micBtn}
             onPress={() => Alert.alert('Hermes Voice', 'Listening for voice prompt...')}
             activeOpacity={0.6}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Voice Input"
           >
-            <Mic size={18} color={colors.textSecondary} strokeWidth={2} />
+            <Mic size={20} color="#9CA3AF" strokeWidth={2.2} />
           </TouchableOpacity>
         )}
       </View>
@@ -168,53 +173,42 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.bgScreen,
+    backgroundColor: '#0C0C0E',
     zIndex: 30,
   },
-  plusBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.bgCircleBtn,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  inputPill: {
-    flex: 1,
-    height: 44,
-    backgroundColor: colors.bgCard,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 9999,
-    paddingLeft: 16,
-    paddingRight: 6,
+  inputCapsule: {
+    height: 52,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 26,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  plusBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   textInput: {
     flex: 1,
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 15,
     paddingVertical: 0,
+    paddingHorizontal: 4,
   },
   sendBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   micBtn: {
-    padding: 6,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,6 +1,6 @@
 export const colors = {
-  // Canvas & Backgrounds (Exact Chief / Nous warm charcoal)
-  bgScreen: '#161618',
+  // Canvas & Backgrounds (Exact OpenBot / Chief deep dark canvas)
+  bgScreen: '#0C0C0E',
   bgCard: '#202023',
   bgCardInner: '#19191B',
   bgCardSubtle: '#242428',

@@ -1,11 +1,36 @@
 [
   {
-    "id": "agent-1792572619469",
-    "name": "Autonomous Agent",
-    "role": "Software Engineer",
-    "systemPrompt": "You are an autonomous AI software engineer. Analyze code, run terminal commands, execute git diffs, and write clean production code.",
+    "id": "cloud-roger",
+    "name": "Roger",
+    "role": "Cloud Agent",
+    "systemPrompt": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
+    "instructions": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
     "engine": "hermes",
-    "engineLabel": "Nous Hermes 3",
+    "engineLabel": "Nous Hermes 3 · Codex",
+    "model": "gpt-5.6-luna",
+    "workspacePath": "D:\\project\\O one",
+    "status": "ready",
+    "capabilities": [
+      "Terminal",
+      "Code Diff",
+      "MCP Tools"
+    ],
+    "mcpServers": [],
+    "createdAt": "2026-10-21T11:00:00.000Z",
+    "avatarShape": 6,
+    "avatarColor": "#EA580C",
+    "reasoningLevel": "High",
+    "notifications": true,
+    "isCloudAgent": true
+  },
+  {
+    "id": "agent-steve",
+    "name": "Steve",
+    "role": "The Captain",
+    "systemPrompt": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
+    "instructions": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
+    "engine": "hermes",
+    "engineLabel": "Nous Hermes 3 · Codex",
     "model": "gpt-5.6-luna",
     "workspacePath": "D:\\project\\O one",
     "status": "ready",
@@ -14,6 +39,11 @@
       "Code Diff"
     ],
     "mcpServers": [],
-    "createdAt": "2026-10-21T08:50:19.469Z"
+    "createdAt": "2026-10-19T10:00:00.000Z",
+    "avatarShape": 0,
+    "avatarColor": "#2563EB",
+    "reasoningLevel": "High",
+    "notifications": true,
+    "isCloudAgent": false
   }
 ]

@@ -7,9 +7,10 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
-import { Terminal, Send, Trash2, Shield, Play } from 'lucide-react-native';
+import { Terminal, Send, Trash2, Shield, Play, ArrowLeft, Layers } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { rpcClient } from '../services/rpcClient';
+import { useAppStore } from '../store/useAppStore';
 import { TerminalLog } from '../types';
 
 type ShellType = 'wsl' | 'powershell' | 'cmd';
@@ -24,6 +25,7 @@ const PRESET_COMMANDS = [
 ];
 
 export const TerminalScreen: React.FC = () => {
+  const { setSurface, openDrawer } = useAppStore();
   const [shellType, setShellType] = useState<ShellType>('wsl');
   const [commandInput, setCommandInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -104,6 +106,30 @@ export const TerminalScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      {/* Top Header */}
+      <View style={styles.topHeader}>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={() => setSurface('home')}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ArrowLeft size={18} color="#FFFFFF" strokeWidth={2.4} />
+        </TouchableOpacity>
+        <View style={styles.headerTitleBox}>
+          <Text style={styles.headerTitleText}>Linux Shell</Text>
+          <Text style={styles.headerSubText}>WSL2 Ubuntu 24.04 Active</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={openDrawer}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Layers size={18} color="#FFFFFF" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+
       {/* Shell Selector Bar */}
       <View style={styles.shellBar}>
         <View style={styles.shellSelector}>
@@ -409,5 +435,36 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     backgroundColor: '#2A2A33',
+  },
+  topHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#0D0D10',
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#18181D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleBox: {
+    alignItems: 'center',
+  },
+  headerTitleText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerSubText: {
+    fontSize: 11,
+    color: colors.accentEmerald,
+    fontWeight: '500',
   },
 });

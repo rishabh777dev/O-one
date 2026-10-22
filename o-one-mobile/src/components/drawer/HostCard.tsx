@@ -28,7 +28,7 @@ export const HostCard: React.FC = () => {
     if (mode === 'Azure VM') {
       rpcClient.setHost('100.92.14.8');
     } else if (mode === 'Local PC') {
-      rpcClient.setHost('192.168.1.7');
+      rpcClient.setHost('10.56.5.83');
     }
   };
 
@@ -153,7 +153,7 @@ export const HostCard: React.FC = () => {
               style={styles.modalInput}
               value={customHostUrl}
               onChangeText={setCustomHostUrl}
-              placeholder="e.g. ws://192.168.1.7:8443 or ws://100.92.14.8:8443"
+              placeholder="e.g. ws://10.56.5.83:8443 or ws://100.92.14.8:8443"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
@@ -163,7 +163,7 @@ export const HostCard: React.FC = () => {
             <View style={styles.presetsRow}>
               <TouchableOpacity
                 style={styles.presetPill}
-                onPress={() => setCustomHostUrl('ws://192.168.1.7:8443')}
+                onPress={() => setCustomHostUrl('ws://10.56.5.83:8443')}
               >
                 <Text style={styles.presetText}>Local Wi-Fi</Text>
               </TouchableOpacity>

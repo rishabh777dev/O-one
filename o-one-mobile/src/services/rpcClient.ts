@@ -17,18 +17,30 @@ export interface RPCResponse {
 
 export type MessageHandler = (res: RPCResponse) => void;
 
-function getDefaultHostUrl(): string {
+/**
+ * Dynamically detects the exact IP of the host machine currently serving the Metro bundle to the phone.
+ * Supports home Wi-Fi (192.168.x.x), mobile hotspot (10.x.x.x), office LAN, and web browser.
+ */
+export function detectHostIp(): string {
   if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    return `ws://${window.location.hostname}:8443`;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'localhost';
+    }
+    return window.location.hostname;
   }
   const scriptURL = NativeModules.SourceCode?.scriptURL;
   if (scriptURL) {
     const match = scriptURL.match(/https?:\/\/([^/:]+)/);
-    if (match && match[1]) {
-      return `ws://${match[1]}:8443`;
+    if (match && match[1] && match[1] !== '127.0.0.1' && match[1] !== 'localhost') {
+      return match[1];
     }
   }
-  return 'ws://192.168.1.7:8443';
+  return '192.168.1.7';
+}
+
+export function getDefaultHostUrl(): string {
+  const ip = detectHostIp();
+  return `ws://${ip}:8443`;
 }
 
 class O1RPCClient {
@@ -38,6 +50,7 @@ class O1RPCClient {
   private telemetryListeners: ((data: any) => void)[] = [];
   private isConnected: boolean = false;
   private reconnectTimer: any = null;
+  private offlineQueue: string[] = [];
 
   constructor() {
     this.connect();
@@ -51,12 +64,19 @@ class O1RPCClient {
   }
 
   public setHost(ipOrUrl: string) {
-    if (ipOrUrl.startsWith('ws://') || ipOrUrl.startsWith('wss://')) {
-      this.hostUrl = ipOrUrl;
+    const clean = ipOrUrl.trim();
+    if (clean.startsWith('ws://') || clean.startsWith('wss://')) {
+      this.hostUrl = clean;
+    } else if (clean.includes(':')) {
+      this.hostUrl = `ws://${clean}`;
     } else {
-      this.hostUrl = `ws://${ipOrUrl}:8443`;
+      this.hostUrl = `ws://${clean}:8443`;
     }
     this.connect();
+  }
+
+  public isReady(): boolean {
+    return this.isConnected;
   }
 
   public getHost(): string {
@@ -80,6 +100,14 @@ class O1RPCClient {
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
+        }
+
+        // Flush offline queue immediately upon establishing connection
+        while (this.offlineQueue.length > 0) {
+          const queued = this.offlineQueue.shift();
+          if (queued && this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(queued);
+          }
         }
       };
 
@@ -105,15 +133,15 @@ class O1RPCClient {
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        console.log(`[O1 RPC] Connection closed to ${this.hostUrl}. Reconnecting in 5s...`);
+        console.log(`[O1 RPC] Connection closed to ${this.hostUrl}. Reconnecting in 3s...`);
         this.scheduleReconnect();
       };
 
-      this.ws.onerror = (err) => {
-        console.warn(`[O1 RPC] WebSocket error connecting to ${this.hostUrl}:`, err);
+      this.ws.onerror = () => {
+        console.log(`[O1 RPC] WebSocket connection handshake state for ${this.hostUrl}`);
       };
     } catch (e) {
-      console.warn('[O1 RPC] Connection failed:', e);
+      console.log('[O1 RPC] Connection attempt ended, scheduling retry...');
       this.scheduleReconnect();
     }
   }
@@ -122,23 +150,30 @@ class O1RPCClient {
     if (!this.reconnectTimer) {
       this.reconnectTimer = setTimeout(() => {
         this.reconnectTimer = null;
+        // Dynamically auto-refresh if current host IP is different from active Metro network
+        const autoIp = detectHostIp();
+        if (this.hostUrl.includes('10.56.5.83') && autoIp !== '10.56.5.83') {
+          this.hostUrl = `ws://${autoIp}:8443`;
+        }
         this.connect();
-      }, 5000);
+      }, 3000);
     }
   }
 
   public send(method: string, params?: any, onResponse?: MessageHandler): string {
     const id = `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const payload: RPCRequest = { id, method, params };
+    const serialized = JSON.stringify(payload);
 
     if (onResponse) {
       this.handlers.set(id, onResponse);
     }
 
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(payload));
+      this.ws.send(serialized);
     } else {
-      console.log(`[O1 RPC] Queued offline message: ${method}`);
+      console.log(`[O1 RPC] Queued offline message: ${method} (will dispatch on connect)`);
+      this.offlineQueue.push(serialized);
     }
 
     return id;

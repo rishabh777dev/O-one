@@ -9,12 +9,14 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { Check, Plus, X, ShieldCheck, RefreshCw, Trash2, Play, Globe, Terminal } from 'lucide-react-native';
+import { Check, Plus, X, ShieldCheck, RefreshCw, Trash2, Play, Globe, Terminal, ArrowLeft, Layers } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { MCPServerItem } from '../types';
 import { rpcClient } from '../services/rpcClient';
+import { useAppStore } from '../store/useAppStore';
 
 export const MarketplaceScreen: React.FC = () => {
+  const { setSurface, openDrawer } = useAppStore();
   const [activeTab, setActiveTab] = useState<'configured' | 'catalog'>('configured');
   const [configuredServers, setConfiguredServers] = useState<MCPServerItem[]>([]);
   const [catalogServers, setCatalogServers] = useState<MCPServerItem[]>([]);
@@ -54,7 +56,7 @@ export const MarketplaceScreen: React.FC = () => {
   const handleInstallCatalog = (serverName: string) => {
     setStatusMessage(`Installing ${serverName} via host daemon...`);
     rpcClient.send('mcp.install', { name: serverName }, (res) => {
-      if (res.success) {
+      if (!res.error) {
         setStatusMessage(`✓ ${serverName} installed successfully!`);
         fetchServers();
       } else {
@@ -71,7 +73,7 @@ export const MarketplaceScreen: React.FC = () => {
       'mcp.add',
       { name: customName.trim(), commandOrUrl: customCommandOrUrl.trim() },
       (res) => {
-        if (res.success) {
+        if (!res.error) {
           setStatusMessage(`✓ Connected "${customName}" to host.`);
           setShowAddModal(false);
           setCustomName('');
@@ -111,9 +113,33 @@ export const MarketplaceScreen: React.FC = () => {
   return (
     <View style={styles.screenWrapper}>
       {/* Top Header */}
+      <View style={styles.navHeader}>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={() => setSurface('home')}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <ArrowLeft size={18} color="#FFFFFF" strokeWidth={2.4} />
+        </TouchableOpacity>
+        <View style={styles.navTitleBox}>
+          <Text style={styles.navTitleText}>MCP Hub</Text>
+          <Text style={styles.navSubText}>68+ Tools & Connectors</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.headerBtn}
+          onPress={openDrawer}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Layers size={18} color="#FFFFFF" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Action Banner */}
       <View style={styles.topBar}>
-        <View>
-          <Text style={styles.topBarTitle}>Model Context Protocol (MCP) Hub</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.topBarTitle}>Model Context Protocol</Text>
           <Text style={styles.topBarSubtitle}>Connect any local stdio tool or remote SSE server</Text>
         </View>
 
@@ -710,5 +736,36 @@ const styles = StyleSheet.create({
   btnModalCancelText: {
     fontSize: 12.5,
     color: colors.textSecondary,
+  },
+  navHeader: {
+    height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#0D0D10',
+  },
+  headerBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#18181D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitleBox: {
+    alignItems: 'center',
+  },
+  navTitleText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  navSubText: {
+    fontSize: 11,
+    color: colors.hermesOrange,
+    fontWeight: '500',
   },
 });

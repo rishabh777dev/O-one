@@ -1,4 +1,22 @@
-export type AppSurface = 'cockpit' | 'ide' | 'terminal' | 'workflows' | 'marketplace' | 'builder';
+export type AppSurface = 'home' | 'cockpit' | 'ide' | 'terminal' | 'workflows' | 'marketplace' | 'builder';
+
+export type ServerType = 'local' | 'ssh' | 'phone' | 'cloud';
+
+export interface ServerItem {
+  id: string;
+  name: string;
+  type: ServerType;
+  typeLabel: string; // e.g. "Local", "SSH Remote", "Phone (Termux)", "Cloud"
+  host?: string;
+  port?: number;
+  username?: string;
+  authType?: 'password' | 'key';
+  status: 'connected' | 'offline' | 'connecting';
+  color?: string;
+  icon?: 'monitor' | 'cloud' | 'smartphone' | 'terminal';
+  agentsCount?: number;
+  lastConnected?: string;
+}
 
 export type HostMode = 'Azure VM' | 'Local PC' | 'Phone';
 
@@ -31,6 +49,13 @@ export interface Agent {
   capabilities: string[];
   mcpServers: string[];
   createdAt: string;
+  // OpenBot creature avatar & custom attributes
+  avatarShape?: number; // 0-11
+  avatarColor?: string; // hex
+  reasoningLevel?: 'High' | 'Med' | 'Low';
+  instructions?: string;
+  notifications?: boolean;
+  isCloudAgent?: boolean;
 }
 
 export interface ChatMessage {
@@ -40,6 +65,7 @@ export interface ChatMessage {
   timestamp: string;
   thoughtTrace?: string;
   actionCard?: ActionCardData;
+  isThinking?: boolean;
 }
 
 export interface ActionCardData {
