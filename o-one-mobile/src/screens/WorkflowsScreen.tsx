@@ -19,7 +19,7 @@ const defaultWorkflows: WorkflowItem[] = [
     badge: 'Active · Webhook',
     steps: [
       { id: 's1', title: '1. Trigger: Sentry Alert', agentOrTool: 'HTTP Webhook', type: 'trigger' },
-      { id: 's2', title: '2. Support Agent: Trace Analysis', agentOrTool: 'Hermes 3', type: 'analysis' },
+      { id: 's2', title: '2. Support Agent: Trace Analysis', agentOrTool: 'Hermes Agent', type: 'analysis' },
       { id: 's3', title: '3. Antigravity CLI: Fix & Test', agentOrTool: 'Azure VM', type: 'code' },
       { id: 's4', title: '4. Mobile Push: Approval Gate', agentOrTool: 'Human Gate', type: 'gate' },
     ],
@@ -56,7 +56,7 @@ export const WorkflowsScreen: React.FC = () => {
       badge: 'Active · On-Demand',
       steps: [
         { id: `s-${Date.now()}-1`, title: '1. Trigger: Manual dispatch', agentOrTool: 'Mobile Push', type: 'trigger' },
-        { id: `s-${Date.now()}-2`, title: '2. Hermes: Task analysis', agentOrTool: 'Hermes 3', type: 'analysis' },
+        { id: `s-${Date.now()}-2`, title: '2. Hermes: Task analysis', agentOrTool: 'Hermes Agent', type: 'analysis' },
         { id: `s-${Date.now()}-3`, title: '3. Antigravity CLI: Workspace execution', agentOrTool: 'Azure VM', type: 'code' },
       ],
     };

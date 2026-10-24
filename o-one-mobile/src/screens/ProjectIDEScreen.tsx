@@ -18,7 +18,7 @@ import { ChatMessage } from '../types';
 
 const availableEngines = [
   { id: 'antigravity', label: 'Antigravity CLI · High', desc: 'Deep code reasoning & multi-file patch generation' },
-  { id: 'hermes', label: 'Nous Hermes 3 · Fast', desc: 'Local zero-markup model on host daemon' },
+  { id: 'hermes', label: 'Hermes Agent · Fast', desc: 'Local zero-markup model on host daemon' },
   { id: 'claude', label: 'Claude Code · Med', desc: 'Anthropic agent with standard tool loop' },
   { id: 'codex', label: 'Codex CLI · Med', desc: 'OpenAI coding agent' },
 ];

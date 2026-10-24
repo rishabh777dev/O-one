@@ -273,7 +273,7 @@ export const NavigationDrawer: React.FC = () => {
             activeOpacity={0.7}
           >
             <Plus size={16} color="#71717A" />
-            <Text style={styles.addServerRowText}>Add a new server (SSH / Phone / Cloud)</Text>
+            <Text style={styles.addServerRowText}>Add a new server (Laptop / On-Device / Cloud VPS)</Text>
           </TouchableOpacity>
 
           {/* Shared Knowledge Section (Shared across all 3 workspaces) */}

@@ -19,7 +19,7 @@ export interface DistroPackage {
 const DEFAULT_PACKAGES: DistroPackage[] = [
   {
     id: 'hermes',
-    name: 'Hermes 3 CLI Agent',
+    name: 'Hermes CLI Agent',
     command: 'hermes',
     version: 'v0.8.2',
     description: 'Autonomous multi-turn agent with tool calling, memory, and profile switching.',

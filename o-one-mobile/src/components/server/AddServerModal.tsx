@@ -113,18 +113,19 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
     );
 
     const newServer: ServerItem = {
-      id: `srv-ssh-${Date.now()}`,
-      name: sshName.trim() || 'Remote SSH Server',
-      type: 'ssh',
-      typeLabel: 'SSH Remote',
+      id: `srv-cloud-vps-${Date.now()}`,
+      name: sshName.trim() || 'Cloud VPS (Remote)',
+      type: 'cloud',
+      typeLabel: 'Cloud VPS',
       host: `${sshHost.trim()}:${sshPort.trim()}`,
       username: sshUser.trim(),
       status: 'connected',
-      color: '#3B82F6',
-      icon: 'terminal',
+      color: '#38BDF8',
+      icon: 'cloud',
       lastConnected: 'Just now',
     };
     addServer(newServer);
+    Alert.alert('Cloud VPS Added', `Connected to ${newServer.name} via SSH / Hermes Gateway.`);
     onClose();
   };
 
@@ -188,7 +189,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
           <View style={{ width: 36 }} />
         </View>
 
-        {/* Server Type Segmented Tab Bar */}
+        {/* Server Type Segmented Tab Bar: 3 Clean Workspaces */}
         <View style={styles.tabBar}>
           <TouchableOpacity
             style={[styles.tabItem, activeTab === 'phone' && styles.tabItemActive]}
@@ -202,21 +203,14 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'cloud' && styles.tabItemActive]}
+            style={[styles.tabItem, (activeTab === 'cloud' || activeTab === 'ssh') && styles.tabItemActive]}
             onPress={() => setActiveTab('cloud')}
             activeOpacity={0.7}
           >
-            <Cloud size={14} color={activeTab === 'cloud' ? '#FFFFFF' : '#71717A'} />
-            <Text style={[styles.tabText, activeTab === 'cloud' && styles.tabTextActive]}>Cloud</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tabItem, activeTab === 'ssh' && styles.tabItemActive]}
-            onPress={() => setActiveTab('ssh')}
-            activeOpacity={0.7}
-          >
-            <Terminal size={14} color={activeTab === 'ssh' ? '#FFFFFF' : '#71717A'} />
-            <Text style={[styles.tabText, activeTab === 'ssh' && styles.tabTextActive]}>SSH</Text>
+            <Cloud size={14} color={(activeTab === 'cloud' || activeTab === 'ssh') ? '#38BDF8' : '#71717A'} />
+            <Text style={[styles.tabText, (activeTab === 'cloud' || activeTab === 'ssh') && styles.tabTextActive]}>
+              Cloud (VPS)
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -225,7 +219,9 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
             activeOpacity={0.7}
           >
             <Monitor size={14} color={activeTab === 'local' ? '#FFFFFF' : '#71717A'} />
-            <Text style={[styles.tabText, activeTab === 'local' && styles.tabTextActive]}>Laptop</Text>
+            <Text style={[styles.tabText, activeTab === 'local' && styles.tabTextActive]}>
+              Laptop
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -378,92 +374,23 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
           )}
 
           {/* ========================================================================= */}
-          {/* TAB 2: CLOUD SERVER (OPENBOT / VPS GATEWAY)                                */}
+          {/* TAB 2: CLOUD VPS SERVER (SSH / REMOTE HERMES GATEWAY)                     */}
           {/* ========================================================================= */}
-          {activeTab === 'cloud' && (
+          {(activeTab === 'cloud' || activeTab === 'ssh') && (
             <View>
               <View style={styles.introCard}>
-                <Text style={styles.introTitle}>Dedicated Cloud Servers</Text>
-                <Text style={styles.introSub}>
-                  Hosted VPS or Azure compute clusters for 24/7 background agent workflows and heavy
-                  browser automation.
-                </Text>
-              </View>
-
-              {/* Plans Card */}
-              <View style={styles.plansCard}>
-                <TouchableOpacity style={styles.planRow} onPress={handleJoinCloud} activeOpacity={0.7}>
-                  <Text style={styles.planName}>Starter</Text>
-                  <Text style={styles.planTagline}>For one agent and basic routines.</Text>
-                  <Text style={styles.planSpecs}>Up to 3 members · 12 GB storage · Base speed</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.planRow} onPress={handleJoinCloud} activeOpacity={0.7}>
-                  <Text style={styles.planName}>Standard</Text>
-                  <Text style={styles.planTagline}>For a small team with daily routines.</Text>
-                  <Text style={styles.planSpecs}>Up to 10 members · 50 GB storage · 2× faster</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.planRow, { borderBottomWidth: 0 }]}
-                  onPress={handleJoinCloud}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.planName}>Pro</Text>
-                  <Text style={styles.planTagline}>For many agents and heavy browser work.</Text>
-                  <Text style={styles.planSpecs}>Up to 25 members · 100 GB storage · 4× faster</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.sectionHeaderLabel}>On your computer</Text>
-
-              <View style={styles.computerCard}>
-                <TouchableOpacity style={styles.computerRow} activeOpacity={0.7}>
-                  <Monitor size={18} color="#FFFFFF" />
-                  <View style={styles.computerTextCol}>
-                    <Text style={styles.computerRowTitle}>Add a cloud server</Text>
-                    <Text style={styles.computerRowSub}>
-                      In O one, open Settings → Hosted servers and select Add server.
-                    </Text>
+                <View style={styles.pillRow}>
+                  <View style={[styles.badgePill, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                    <Text style={[styles.badgePillText, { color: '#38BDF8' }]}>REMOTE VPS</Text>
                   </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.computerRow, { borderBottomWidth: 0 }]}
-                  activeOpacity={0.7}
-                >
-                  <CreditCard size={18} color="#FFFFFF" />
-                  <View style={styles.computerTextCol}>
-                    <Text style={styles.computerRowTitle}>Change a plan</Text>
-                    <Text style={styles.computerRowSub}>In O one, open Settings → Billing.</Text>
+                  <View style={styles.badgePill}>
+                    <Text style={styles.badgePillText}>SSH & GATEWAY</Text>
                   </View>
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                style={styles.joinServerCard}
-                onPress={handleJoinCloud}
-                activeOpacity={0.7}
-              >
-                <Ticket size={20} color="#FFFFFF" />
-                <View style={styles.computerTextCol}>
-                  <Text style={styles.computerRowTitle}>Join a server</Text>
-                  <Text style={styles.computerRowSub}>Use an invitation from a server owner.</Text>
                 </View>
-                <ChevronRight size={18} color="#71717A" />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ========================================================================= */}
-          {/* TAB 3: DIRECT SSH REMOTE CONNECTION                                       */}
-          {/* ========================================================================= */}
-          {activeTab === 'ssh' && (
-            <View>
-              <View style={styles.introCard}>
-                <Text style={styles.introTitle}>Direct SSH Connection</Text>
+                <Text style={styles.introTitle}>Cloud VPS Workspace</Text>
                 <Text style={styles.introSub}>
-                  Connect directly to any remote Linux VPS or dedicated server over secure SSH.
+                  Attach your remote Linux VPS or cloud server. O one directly connects via OpenSSH
+                  and links to the hosted Hermes instance with zero latency.
                 </Text>
               </View>
 
@@ -486,7 +413,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
                       style={styles.input}
                       value={sshHost}
                       onChangeText={setSshHost}
-                      placeholder="e.g. 198.51.100.24"
+                      placeholder="e.g. 198.51.100.24 or vps.myhost.com"
                       placeholderTextColor="#52525B"
                       autoCapitalize="none"
                     />
@@ -506,7 +433,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
 
                 <View style={styles.fieldRow}>
                   <View style={[styles.fieldGroup, { flex: 1 }]}>
-                    <Text style={styles.fieldLabel}>User</Text>
+                    <Text style={styles.fieldLabel}>SSH User</Text>
                     <TextInput
                       style={styles.input}
                       value={sshUser}
@@ -517,16 +444,26 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
                     />
                   </View>
                   <View style={[styles.fieldGroup, { flex: 1.5 }]}>
-                    <Text style={styles.fieldLabel}>Password</Text>
+                    <Text style={styles.fieldLabel}>SSH Password / Key</Text>
                     <TextInput
                       style={styles.input}
                       value={sshPassword}
                       onChangeText={setSshPassword}
-                      placeholder="Password"
+                      placeholder="Password or ~/.ssh/id_rsa"
                       placeholderTextColor="#52525B"
                       secureTextEntry
                     />
                   </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Remote Hermes Path (Optional)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="~/.hermes/bin/hermes (default)"
+                    placeholderTextColor="#52525B"
+                    autoCapitalize="none"
+                  />
                 </View>
 
                 <TouchableOpacity
@@ -535,8 +472,9 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({ visible, onClose
                   disabled={isConnectingSSH}
                   activeOpacity={0.8}
                 >
+                  <Cloud size={16} color="#FFFFFF" strokeWidth={2.2} />
                   <Text style={styles.primaryActionText}>
-                    {isConnectingSSH ? 'Connecting...' : 'Connect via SSH'}
+                    {isConnectingSSH ? 'Verifying SSH Connection...' : 'Connect & Save Cloud VPS'}
                   </Text>
                 </TouchableOpacity>
               </View>

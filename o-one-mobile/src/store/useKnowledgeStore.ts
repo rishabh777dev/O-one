@@ -9,7 +9,7 @@ const DEFAULT_KNOWLEDGE: KnowledgeFile[] = [
   {
     id: 'workspace-architecture.md',
     name: 'workspace-architecture.md',
-    content: `# Shared Workspace Architecture\n\nAll three workspaces (Host PC, On-Device Standalone Linux, and Remote SSH) share this knowledge base for common guidelines, architecture specs, and environment context.\n\n- Host Server: Runs Hermes 3 & Antigravity\n- On-Device: Standalone Linux container on phone\n- SSH Workspace: Remote cloud development node`,
+    content: `# Shared Workspace Architecture\n\nAll three workspaces (Host PC, On-Device Standalone Linux, and Remote SSH) share this knowledge base for common guidelines, architecture specs, and environment context.\n\n- Host Server: Runs Hermes Agent & Antigravity\n- On-Device: Standalone Linux container on phone\n- SSH Workspace: Remote cloud development node`,
     updatedAt: new Date().toISOString(),
     size: 420,
     description: 'Cross-server architectural blueprint and node specs',
@@ -25,7 +25,7 @@ const DEFAULT_KNOWLEDGE: KnowledgeFile[] = [
   {
     name: 'environment-manifest.json',
     id: 'environment-manifest.json',
-    content: `{\n  "version": "2.0.0",\n  "sharedKnowledge": true,\n  "supportedEngines": ["Hermes 3", "Antigravity ACP", "OpenRouter"],\n  "knowledgeSync": "active"\n}`,
+    content: `{\n  "version": "2.0.0",\n  "sharedKnowledge": true,\n  "supportedEngines": ["Hermes Agent", "Antigravity ACP", "OpenRouter"],\n  "knowledgeSync": "active"\n}`,
     updatedAt: new Date().toISOString(),
     size: 154,
     description: 'Runtime environment configuration and shared flags',

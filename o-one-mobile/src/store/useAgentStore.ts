@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatMessage, Agent } from '../types';
 import { rpcClient, RPCResponse } from '../services/rpcClient';
+import { useAppStore } from './useAppStore';
 
 const STORAGE_KEY_MESSAGES = '@o1_chat_messages_v2';
 const STORAGE_KEY_SESSIONS = '@o1_chat_sessions_v1';
@@ -167,6 +168,69 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             set({ messages: { ...get().messages, [agentId]: updated } });
           } else if (res.type === 'done') {
             const final = accumulatedText || 'Command executed (Exit 0)';
+            const updated = (get().messages[agentId] || []).map((m) =>
+              m.id === agentMsgId ? { ...m, content: final, isThinking: false } : m
+            );
+            set({ messages: { ...get().messages, [agentId]: updated } });
+            AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(get().messages));
+          }
+        }
+      );
+      return;
+    }
+
+    // On-Device Phone Environment: Execute hermes CLI in phone's local Linux runtime
+    const activeServerId = useAppStore.getState().activeServerId;
+    const servers = useAppStore.getState().servers;
+    const currentServer = servers.find((s) => s.id === activeServerId);
+    const isOnDevice =
+      currentServer?.type === 'phone' ||
+      activeServerId === 'server-ondevice-alpine' ||
+      agent.serverId === 'server-ondevice-alpine';
+
+    if (isOnDevice && agent.engine === 'hermes') {
+      const activeSession = get().sessions[agentId];
+      const safePrompt = text.replace(/"/g, '\\"');
+      let phoneCmd = `hermes chat -q "${safePrompt}" --format stream-json -Q`;
+      if (activeSession) {
+        phoneCmd += ` --resume ${activeSession}`;
+      }
+      if (agent.model) {
+        phoneCmd += ` -m ${agent.model}`;
+      }
+
+      rpcClient.send(
+        'terminal.execute',
+        { command: phoneCmd, shellType: 'phone' },
+        (res: RPCResponse) => {
+          if (res.data) {
+            const rawLines = res.data.split('\n');
+            for (const line of rawLines) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const evt = JSON.parse(trimmed);
+                if (evt.type === 'text' && evt.text) {
+                  accumulatedText += evt.text;
+                } else if (evt.type === 'result' && evt.text) {
+                  accumulatedText = evt.text;
+                }
+              } catch {
+                if (
+                  !trimmed.includes('Resumed session') &&
+                  !trimmed.startsWith('Warning:') &&
+                  !trimmed.startsWith('session_id:')
+                ) {
+                  accumulatedText += trimmed + '\n';
+                }
+              }
+            }
+            const updated = (get().messages[agentId] || []).map((m) =>
+              m.id === agentMsgId ? { ...m, content: sanitizeChatMessage(accumulatedText), isThinking: false } : m
+            );
+            set({ messages: { ...get().messages, [agentId]: updated } });
+          } else if (res.type === 'done') {
+            const final = sanitizeChatMessage(accumulatedText) || '✓ Turn complete';
             const updated = (get().messages[agentId] || []).map((m) =>
               m.id === agentMsgId ? { ...m, content: final, isThinking: false } : m
             );

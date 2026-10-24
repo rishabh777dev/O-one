@@ -7,16 +7,17 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
-import { Sparkles, Cpu, Layers, Folder, Check, Terminal, Shield } from 'lucide-react-native';
+import { Sparkles, Cpu, Layers, Folder, Check, Terminal, Shield, Globe } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { useAppStore } from '../store/useAppStore';
 import { Agent, AgentEngine, MCPServerItem } from '../types';
 import { rpcClient } from '../services/rpcClient';
+import { ModelPickerModal } from '../components/common/ModelPickerModal';
 
 const ENGINE_OPTIONS: { id: AgentEngine; label: string; desc: string; badge: string }[] = [
   {
     id: 'hermes',
-    label: 'Nous Hermes 3',
+    label: 'Hermes Agent',
     desc: 'Local streaming agent with native tool-calling & reasoning',
     badge: 'Fast · Local',
   },
@@ -46,12 +47,12 @@ const ENGINE_OPTIONS: { id: AgentEngine; label: string; desc: string; badge: str
   },
 ];
 
-const MODEL_PRESETS = [
+const DEFAULT_MODEL_PRESETS = [
   'gpt-5.6-luna',
-  'hermes-3-llama-3.1-8b',
-  'hermes-3-llama-3.1-70b',
-  'claude-3-7-sonnet',
-  'gemini-2.5-pro',
+  'gpt-6-luna',
+  'gpt-5.6-terra',
+  'gemini-3.7-flash',
+  'grok-4.6',
 ];
 
 export const AgentBuilderScreen: React.FC = () => {
@@ -64,16 +65,31 @@ export const AgentBuilderScreen: React.FC = () => {
   );
   const [selectedEngine, setSelectedEngine] = useState<AgentEngine>('hermes');
   const [selectedModel, setSelectedModel] = useState('gpt-5.6-luna');
+  const [modelPresets, setModelPresets] = useState<string[]>(DEFAULT_MODEL_PRESETS);
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const [workspacePath, setWorkspacePath] = useState('D:\\project\\O one');
   const [availableMcp, setAvailableMcp] = useState<MCPServerItem[]>([]);
   const [selectedMcp, setSelectedMcp] = useState<string[]>([]);
 
-  // Fetch real configured MCP servers from the host
+  // Fetch real configured MCP servers & models from the host
   useEffect(() => {
     rpcClient.send('mcp.list', {}, (res) => {
       if (res.result && Array.isArray(res.result)) {
         setAvailableMcp(res.result);
         setSelectedMcp(res.result.map((s) => s.name));
+      }
+    });
+
+    rpcClient.send('models.list', {}, (res) => {
+      if (res.result && Array.isArray(res.result) && res.result.length > 0) {
+        const primaryGroup = res.result[0];
+        if (primaryGroup && Array.isArray(primaryGroup.models)) {
+          const liveIds = primaryGroup.models.map((m: any) => m.id);
+          setModelPresets(liveIds.slice(0, 6));
+        }
+        if (res.activeModel) {
+          setSelectedModel(res.activeModel);
+        }
       }
     });
   }, []);
@@ -97,7 +113,7 @@ export const AgentBuilderScreen: React.FC = () => {
       role: agentRole,
       systemPrompt: systemPrompt.trim(),
       engine: selectedEngine,
-      engineLabel: engineConfig?.label || 'Nous Hermes 3',
+      engineLabel: engineConfig?.label || 'Hermes Agent',
       model: selectedModel.trim(),
       workspacePath: workspacePath.trim(),
       status: 'ready',
@@ -202,13 +218,23 @@ export const AgentBuilderScreen: React.FC = () => {
 
       {/* 3. Model Picker */}
       <View style={styles.sectionCard}>
-        <Text style={styles.sectionTitle}>3. Inference Model</Text>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>3. Inference Model</Text>
+          <TouchableOpacity
+            style={styles.browseModelsBtn}
+            onPress={() => setShowModelPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Globe size={12} color="#38BDF8" />
+            <Text style={styles.browseModelsText}>Gateway Models</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.sectionDesc}>
-          Choose the foundation model (passes `-m` to local CLI or cloud API)
+          Live foundation models authenticated from your Hermes gateway
         </Text>
 
         <View style={styles.presetChips}>
-          {MODEL_PRESETS.map((m) => {
+          {modelPresets.map((m) => {
             const isSelected = selectedModel === m;
             return (
               <TouchableOpacity
@@ -223,10 +249,10 @@ export const AgentBuilderScreen: React.FC = () => {
           })}
         </View>
 
-        <Text style={styles.fieldLabel}>Or Custom Model Name</Text>
+        <Text style={styles.fieldLabel}>Or Selected Model ID</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. gpt-5.6-luna or custom fine-tuned model"
+          placeholder="e.g. gpt-5.6-luna or custom model"
           placeholderTextColor={colors.textMuted}
           value={selectedModel}
           onChangeText={setSelectedModel}
@@ -303,6 +329,12 @@ export const AgentBuilderScreen: React.FC = () => {
         <Sparkles size={16} color="#000000" />
         <Text style={styles.launchBtnText}>Create & Launch Agent</Text>
       </TouchableOpacity>
+
+      <ModelPickerModal
+        visible={showModelPicker}
+        onClose={() => setShowModelPicker(false)}
+        onSelectModel={(m) => setSelectedModel(m)}
+      />
     </ScrollView>
   );
 };
@@ -380,6 +412,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: 'monospace',
     color: colors.accentEmerald,
+  },
+  browseModelsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+  },
+  browseModelsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#38BDF8',
   },
   sectionDesc: {
     fontSize: 11.5,

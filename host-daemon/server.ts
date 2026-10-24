@@ -32,7 +32,7 @@ const seedKnowledge = [
   },
   {
     name: 'environment-manifest.json',
-    content: '{\n  "version": "2.0.0",\n  "sharedKnowledge": true,\n  "supportedEngines": ["Hermes 3", "Antigravity ACP", "OpenRouter"],\n  "knowledgeSync": "active"\n}',
+    content: '{\n  "version": "2.0.0",\n  "sharedKnowledge": true,\n  "supportedEngines": ["Hermes Agent", "Antigravity ACP", "OpenRouter"],\n  "knowledgeSync": "active"\n}',
   },
 ];
 for (const item of seedKnowledge) {
@@ -883,94 +883,214 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     }
 
     // -------------------------------------------------------------
-    // 13. DYNAMIC MODELS & PROVIDERS FROM HOST
+    // 13. DYNAMIC REAL MODELS & PROVIDERS FROM HERMES (NO HALLUCINATIONS)
     // -------------------------------------------------------------
     case 'models.list': {
-      exec(`${hermesBin} status`, (err, stdout) => {
-        let detectedModel = activeHermesModel;
-        let detectedProvider = activeHermesProvider;
-
-        if (!err && stdout) {
-          const modelMatch = stdout.match(/Model:\s+([^\r\n]+)/);
-          if (modelMatch) detectedModel = modelMatch[1].trim();
-
-          const providerMatch = stdout.match(/Provider:\s+([^\r\n]+)/);
-          if (providerMatch) detectedProvider = providerMatch[1].trim();
+      try {
+        const HERMES_DIR = path.join(
+          process.env.USERPROFILE || 'C:\\Users\\risha',
+          'AppData',
+          'Local',
+          'hermes'
+        );
+        const cacheFile = path.join(HERMES_DIR, 'provider_models_cache.json');
+        let cachedProviders: Record<string, { models: string[] }> = {};
+        if (fs.existsSync(cacheFile)) {
+          try {
+            cachedProviders = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+          } catch {}
         }
 
-        const groups = [
-          {
-            provider: `Hermes Engine (${detectedProvider})`,
+        const PROVIDER_METADATA: Record<string, { name: string; engine: string; desc: string }> = {
+          'openai-codex': {
+            name: 'ChatGPT / OpenAI Codex',
             engine: 'hermes',
-            models: [
-              {
-                id: detectedModel,
-                name: `${detectedModel} (Active)`,
-                desc: `Currently active on host (${detectedProvider})`,
-              },
-              {
-                id: 'gpt-4o',
-                name: 'GPT-4o (Codex)',
-                desc: 'Fast multimodal code and tool reasoning',
-              },
-              {
-                id: 'gpt-4o-mini',
-                name: 'GPT-4o Mini',
-                desc: 'Fast, lightweight tool execution',
-              },
-              {
-                id: 'o1',
-                name: 'OpenAI o1',
-                desc: 'Deep chain-of-thought algorithmic reasoning',
-              },
-              {
-                id: 'o1-mini',
-                name: 'OpenAI o1-mini',
-                desc: 'Reasoning model specialized in code synthesis',
-              },
-            ],
+            desc: 'Subscribed OpenAI Codex runtime with native code & reasoning',
           },
-          {
-            provider: 'Antigravity CLI ACP',
-            engine: 'antigravity',
-            models: [
-              {
-                id: 'gemini-2.5-pro',
-                name: 'Gemini 2.5 Pro (Antigravity)',
-                desc: 'Autonomous multi-file planning, git diffs & code execution',
-              },
-              {
-                id: 'gemini-2.5-flash',
-                name: 'Gemini 2.5 Flash',
-                desc: 'Sub-second tool latency and instant code edits',
-              },
-            ],
+          'xai-oauth': {
+            name: 'xAI Grok (OAuth)',
+            engine: 'hermes',
+            desc: 'SuperGrok & Grok 4.x frontier models',
           },
-          {
-            provider: 'OpenRouter (Multi-Provider)',
+          'gemini': {
+            name: 'Google AI Studio (Gemini)',
+            engine: 'hermes',
+            desc: 'Gemini 3.7 / 3.8 / 4.0 models with deep context & tool calls',
+          },
+          'openrouter': {
+            name: 'OpenRouter (Multi-Model)',
             engine: 'openrouter',
-            models: [
-              {
-                id: 'deepseek/deepseek-chat',
-                name: 'DeepSeek-V3',
-                desc: '671B MoE architecture with exceptional code ability',
-              },
-              {
-                id: 'deepseek/deepseek-r1',
-                name: 'DeepSeek-R1 (Reasoning)',
-                desc: 'Mathematical and algorithmic synthesis',
-              },
-              {
-                id: 'anthropic/claude-3.7-sonnet',
-                name: 'Claude 3.7 Sonnet',
-                desc: 'Hybrid reasoning and deep codebase exploration',
-              },
-            ],
+            desc: 'Anthropic Claude, DeepSeek, Qwen & open-weight routing',
           },
-        ];
+          'groq': {
+            name: 'Groq LPUs',
+            engine: 'hermes',
+            desc: 'Ultra-low latency Llama & Compound models',
+          },
+          'mistral': {
+            name: 'Mistral AI',
+            engine: 'hermes',
+            desc: 'Mistral Large, Codestral & reasoning models',
+          },
+          'nvidia': {
+            name: 'NVIDIA NIM',
+            engine: 'hermes',
+            desc: 'Nemotron & accelerated inference catalog',
+          },
+          'tokenrouter': {
+            name: 'TokenRouter',
+            engine: 'hermes',
+            desc: 'Free and community token routing catalog',
+          },
+        };
 
-        ws.send(JSON.stringify({ id, result: groups }));
+        const groups: any[] = [];
+
+        // 1. First group: Active Hermes Provider (Primary)
+        for (const [slug, data] of Object.entries(cachedProviders)) {
+          const meta = PROVIDER_METADATA[slug] || {
+            name: slug.toUpperCase(),
+            engine: 'hermes',
+            desc: `Authenticated Hermes provider: ${slug}`,
+          };
+          const isCurrentProvider =
+            activeHermesProvider.toLowerCase().includes(slug) ||
+            (slug === 'openai-codex' && activeHermesProvider.toLowerCase().includes('chatgpt'));
+
+          const modelItems = (data.models || []).slice(0, 16).map((mId: string) => {
+            const isCurrent = mId === activeHermesModel;
+            let displayTitle = mId;
+            if (mId.includes('/')) {
+              displayTitle = mId.split('/').pop() || mId;
+            }
+            return {
+              id: mId,
+              name: displayTitle,
+              desc: isCurrent ? `Currently active on host (${activeHermesProvider})` : `Available on ${meta.name}`,
+              isCurrent,
+            };
+          });
+
+          // Ensure activeHermesModel is present in its provider group even if not in cache head
+          if (isCurrentProvider && !modelItems.some((m) => m.id === activeHermesModel)) {
+            modelItems.unshift({
+              id: activeHermesModel,
+              name: activeHermesModel,
+              desc: `Currently active on host (${activeHermesProvider})`,
+              isCurrent: true,
+            });
+          }
+
+          groups.push({
+            provider: meta.name,
+            slug,
+            engine: meta.engine,
+            isCurrent: isCurrentProvider,
+            desc: meta.desc,
+            models: modelItems,
+          });
+        }
+
+        // Sort so the currently active provider is at the very top
+        groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
+
+        // 2. Add Antigravity ACP group
+        groups.push({
+          provider: 'Antigravity CLI ACP',
+          slug: 'antigravity',
+          engine: 'antigravity',
+          isCurrent: false,
+          desc: 'Google Deepmind Advanced Agentic Coding CLI',
+          models: [
+            {
+              id: 'gemini-2.5-pro',
+              name: 'Gemini 2.5 Pro (Antigravity)',
+              desc: 'Autonomous multi-file planning, git diffs & code execution',
+            },
+            {
+              id: 'gemini-2.5-flash',
+              name: 'Gemini 2.5 Flash',
+              desc: 'Sub-second tool latency and instant code edits',
+            },
+          ],
+        });
+
+        ws.send(
+          JSON.stringify({
+            id,
+            activeModel: activeHermesModel,
+            activeProvider: activeHermesProvider,
+            result: groups,
+          })
+        );
+      } catch (err: any) {
+        console.error('[O1 Host Daemon] models.list error:', err);
+        ws.send(JSON.stringify({ id, error: err.message, result: [] }));
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // 13b. MODEL SELECTION & SWITCHING
+    // -------------------------------------------------------------
+    case 'models.set': {
+      const targetModel = params.model;
+      const targetProvider = params.provider;
+      if (!targetModel) {
+        ws.send(JSON.stringify({ id, error: 'Model is required' }));
+        break;
+      }
+      console.log(`[O1 Host Daemon] Switching model to: ${targetModel} (provider: ${targetProvider || 'default'})`);
+      
+      let cmd = `${hermesBin} config set model "${targetModel}"`;
+      if (targetProvider) {
+        cmd += ` && ${hermesBin} config set model.provider "${targetProvider}"`;
+      }
+
+      exec(cmd, (err, stdout, stderr) => {
+        activeHermesModel = targetModel;
+        if (targetProvider) activeHermesProvider = targetProvider;
+        updateHermesMetadata();
+        ws.send(
+          JSON.stringify({
+            id,
+            result: {
+              success: !err,
+              model: activeHermesModel,
+              provider: activeHermesProvider,
+              output: stdout || stderr,
+            },
+          })
+        );
       });
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // 14. REAL HERMES SLASH COMMANDS & @ DIRECTIVES
+    // -------------------------------------------------------------
+    case 'slash.list': {
+      const commands = [
+        { command: '/review', name: 'Audit & Review', desc: 'Audit unstaged git diff and verify code quality' },
+        { command: '/refine', name: 'Refine Memory', desc: 'Refine skills and persistent background memories' },
+        { command: '/context', name: 'Context Breakdown', desc: 'Inspect live token usage and context window gauge' },
+        { command: '/tools', name: 'Tools & MCP', desc: 'List active tools, MCP capabilities, and integrations' },
+        { command: '/help', name: 'Help & Commands', desc: 'Show all available Hermes Agent commands' },
+        { command: '/density', name: 'Display Density', desc: 'Toggle compact cockpit display mode' },
+        { command: '/details', name: 'Detail Visibility', desc: 'Toggle agent reasoning and thought details' },
+        { command: '/logs', name: 'Agent Logs', desc: 'Stream recent activity and execution logs' },
+        { command: '/mouse', name: 'Mouse Tracking', desc: 'Configure terminal pointer tracking preset' },
+      ];
+
+      const directives = [
+        { directive: '@diff', name: 'Git Diff', desc: 'Attach current working tree diff' },
+        { directive: '@staged', name: 'Staged Diff', desc: 'Attach staged git changes' },
+        { directive: '@file:', name: 'Attach File', desc: 'Attach a file from the workspace' },
+        { directive: '@folder:', name: 'Attach Folder', desc: 'Attach a folder from the workspace' },
+        { directive: '@git:', name: 'Git Log', desc: 'Attach recent git commit history' },
+      ];
+
+      ws.send(JSON.stringify({ id, result: { commands, directives } }));
       break;
     }
 

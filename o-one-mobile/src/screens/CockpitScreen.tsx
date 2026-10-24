@@ -34,6 +34,7 @@ import { ThoughtTrace } from '../components/common/ThoughtTrace';
 import { CreatureAvatar } from '../components/common/CreatureAvatar';
 import { AgentInfoModal } from '../components/common/AgentInfoModal';
 import { HermesSessionsModal } from '../components/common/HermesSessionsModal';
+import { ModelPickerModal } from '../components/common/ModelPickerModal';
 import { CockpitToolOverlays } from '../components/cockpit/CockpitToolOverlays';
 import { ChatMessage } from '../types';
 
@@ -137,6 +138,7 @@ export const CockpitScreen: React.FC = () => {
 
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [activeTool, setActiveTool] = useState<'none' | 'files' | 'terminal' | 'knowledge'>('none');
 
@@ -345,14 +347,18 @@ export const CockpitScreen: React.FC = () => {
               {activeAgent.role === 'Cloud Agent' ? 'Agent' : (activeAgent.role || 'Agent')}
             </Text>
 
-            <View style={styles.engineBadge}>
+            <TouchableOpacity
+              style={styles.engineBadge}
+              onPress={() => setShowModelPicker(true)}
+              activeOpacity={0.7}
+            >
               <View style={[styles.engineDot, { backgroundColor: agentColor }]} />
               <Text style={styles.engineText}>
                 {(activeAgent.engineLabel || activeAgent.model || 'Hermes Agent')
                   .replace(/Nous Hermes 3/g, 'Hermes Agent')
                   .replace(/Hermes 3/g, 'Hermes Agent')}
               </Text>
-            </View>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -514,6 +520,13 @@ export const CockpitScreen: React.FC = () => {
         agentId={activeAgent.id}
         agentColor={agentColor}
         onClose={() => setShowSessionsModal(false)}
+      />
+
+      {/* Real Dynamic Model Picker from Hermes Gateway */}
+      <ModelPickerModal
+        visible={showModelPicker}
+        agent={activeAgent}
+        onClose={() => setShowModelPicker(false)}
       />
     </View>
   );
