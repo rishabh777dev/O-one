@@ -395,11 +395,11 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     // 2b. OPENCODE ENGINE RUNNER (DIRECT VIA WS)
     // -------------------------------------------------------------
     case 'opencode.run': {
-      const prompt = params.prompt || '';
+      const prompt = params.prompt || params.query || '';
       const cwd = params.cwd || process.cwd();
       const model = params.model;
 
-      const opencodeArgs = ['run', prompt];
+      const opencodeArgs = ['run', prompt, '--auto'];
       if (model && !model.includes('default')) {
         opencodeArgs.push('-m', model.replace('opencode/', ''));
       }

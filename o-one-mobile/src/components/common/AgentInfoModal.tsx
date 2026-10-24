@@ -23,7 +23,7 @@ import { colors } from '../../theme/colors';
 import { CreatureAvatar } from './CreatureAvatar';
 import { ModelSettingsModal } from './ModelSettingsModal';
 import { useAppStore } from '../../store/useAppStore';
-import { Agent } from '../../types';
+import { Agent, AgentEngine } from '../../types';
 
 interface AgentInfoModalProps {
   visible: boolean;
@@ -91,12 +91,18 @@ export const AgentInfoModal: React.FC<AgentInfoModalProps> = ({
     setShapeIndex((prev) => (prev + 1) % 12);
   };
 
-  const handleModelSaved = (model: string, reasoning: 'High' | 'Med' | 'Low', engineLabel: string) => {
+  const handleModelSaved = (
+    model: string,
+    reasoning: 'High' | 'Med' | 'Low',
+    engineLabel: string,
+    engine?: AgentEngine
+  ) => {
     const updated: Agent = {
       ...agent,
       model,
       reasoningLevel: reasoning,
       engineLabel,
+      ...(engine ? { engine } : {}),
     };
     updateAgent(updated);
   };

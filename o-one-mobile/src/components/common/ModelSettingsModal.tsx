@@ -10,14 +10,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Check, Cpu, Zap, Brain, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
-import { Agent } from '../../types';
+import { Agent, AgentEngine } from '../../types';
 import { rpcClient } from '../../services/rpcClient';
 
 interface ModelSettingsModalProps {
   visible: boolean;
   agent?: Agent | null;
   onClose: () => void;
-  onSave: (model: string, reasoning: 'High' | 'Med' | 'Low', engineLabel: string) => void;
+  onSave: (
+    model: string,
+    reasoning: 'High' | 'Med' | 'Low',
+    engineLabel: string,
+    engine?: AgentEngine
+  ) => void;
 }
 
 export function formatProviderName(raw: string, slug?: string): string {
@@ -212,15 +217,28 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
   }, [visible, selectedModel]);
 
   const handleSave = () => {
-    // Determine provider label dynamically
+    // Determine provider label and standalone engine dynamically
     let label = 'Hermes Agent';
+    let engine: AgentEngine = 'hermes';
+
     for (const group of providerGroups) {
       if (group.models.some((m: any) => m.id === selectedModel)) {
         label = formatProviderName(group.provider, (group as any).slug);
+        const grpEngine = (group as any).engine;
+        const grpSlug = (group as any).slug;
+        if (grpEngine === 'opencode' || grpSlug === 'opencode-cli') {
+          engine = 'opencode';
+        } else if (grpEngine === 'antigravity' || grpSlug === 'antigravity') {
+          engine = 'antigravity';
+        } else if (grpEngine === 'claude' || grpSlug === 'claude-cli') {
+          engine = 'claude';
+        } else {
+          engine = 'hermes';
+        }
         break;
       }
     }
-    onSave(selectedModel, reasoningLevel, label);
+    onSave(selectedModel, reasoningLevel, label, engine);
     onClose();
   };
 

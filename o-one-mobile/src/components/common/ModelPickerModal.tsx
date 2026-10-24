@@ -27,7 +27,7 @@ import {
 import { colors } from '../../theme/colors';
 import { rpcClient } from '../../services/rpcClient';
 import { useAppStore } from '../../store/useAppStore';
-import { Agent } from '../../types';
+import { Agent, AgentEngine } from '../../types';
 import { formatProviderName } from './ModelSettingsModal';
 
 interface ModelItem {
@@ -136,10 +136,19 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
         setActiveModel(model.id);
         setActiveProvider(group.provider);
 
-        // Update the active agent's model in app store
+        // Update the active agent's engine and model in app store
         if (agent) {
+          const isStandalone =
+            (group as any).category === 'standalone' ||
+            group.slug === 'opencode-cli' ||
+            group.slug === 'antigravity';
+          const eng: AgentEngine = isStandalone
+            ? ((group.engine || 'hermes') as AgentEngine)
+            : 'hermes';
+
           updateAgent({
             ...agent,
+            engine: eng,
             model: model.id,
             engineLabel: `${model.name} · ${group.provider.split(' ')[0]}`,
           });
