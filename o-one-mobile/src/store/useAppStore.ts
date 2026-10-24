@@ -59,6 +59,7 @@ interface AppState {
   addNewProject: (project: ProjectItem) => void;
   openAgentById: (id: string) => boolean;
   openTerminalWithCommand: (cmd: string, shell?: 'wsl' | 'powershell' | 'phone' | 'cmd') => void;
+  clearTerminalInitialCommand: () => void;
   getAgentsForActiveServer: () => Agent[];
   getProjectsForActiveServer: () => ProjectItem[];
   addAgent: (agent: Agent) => void;
@@ -200,6 +201,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       terminalInitialShell: shell || 'wsl',
       currentSurface: 'terminal',
       isDrawerOpen: false,
+    });
+  },
+
+  clearTerminalInitialCommand: () => {
+    set({
+      terminalInitialCommand: '',
+      terminalInitialShell: 'wsl',
     });
   },
 

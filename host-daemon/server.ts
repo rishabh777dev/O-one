@@ -422,6 +422,11 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
         ws.send(JSON.stringify({ id, type: 'stderr', data: data.toString() }));
       });
 
+      child.on('error', (err) => {
+        ws.send(JSON.stringify({ id, type: 'stderr', data: `Execution error: ${err.message}\n` }));
+        ws.send(JSON.stringify({ id, type: 'done', exitCode: 1 }));
+      });
+
       child.on('close', (code) => {
         ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
       });
@@ -442,7 +447,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
         { id: 'python', name: 'Python3 Environment', bin: isWin ? 'python' : 'python3', installCmd: 'pkg install python || apt-get install python3' },
       ];
 
-      const lookupCmd = isWin ? 'where' : 'which';
+      const lookupCmd = isWin ? 'where.exe' : 'which';
       const results: any[] = [];
       let pending = cliChecks.length;
 
