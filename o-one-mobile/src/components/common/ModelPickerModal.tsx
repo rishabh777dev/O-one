@@ -248,9 +248,11 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
                     <View style={styles.groupTitleCol}>
                       <View style={styles.groupNameRow}>
                         <Text style={styles.groupName}>{group.provider}</Text>
-                        <View style={styles.countPill}>
-                          <Text style={styles.countPillText}>{group.models.length}</Text>
-                        </View>
+                        {isCollapsed ? (
+                          <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
+                        ) : (
+                          <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
+                        )}
                         {group.isCurrent && (
                           <View style={styles.activePill}>
                             <Text style={styles.activePillText}>ACTIVE</Text>
@@ -260,13 +262,6 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
                       <Text style={styles.groupDesc} numberOfLines={1}>
                         {group.desc}
                       </Text>
-                    </View>
-                    <View style={styles.collapseIconBox}>
-                      {isCollapsed ? (
-                        <ChevronRight size={16} color="#71717A" strokeWidth={2.4} />
-                      ) : (
-                        <ChevronDown size={16} color="#E4E4E7" strokeWidth={2.4} />
-                      )}
                     </View>
                   </TouchableOpacity>
 
@@ -446,25 +441,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  countPill: {
-    backgroundColor: '#27272E',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-  },
-  countPillText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#A1A1AA',
-  },
-  collapseIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   activePill: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',

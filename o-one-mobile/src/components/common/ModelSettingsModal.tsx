@@ -293,30 +293,24 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
                 >
                   <View style={styles.groupHeaderLeft}>
                     <Text style={styles.groupHeader}>{displayTitle.toUpperCase()}</Text>
-                    <View style={styles.countBadge}>
-                      <Text style={styles.countBadgeText}>{group.models.length}</Text>
-                    </View>
+                    {isCollapsed ? (
+                      <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
+                    ) : (
+                      <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
+                    )}
                     {group.isCurrent && (
                       <View style={styles.activePill}>
                         <Text style={styles.activePillText}>ACTIVE</Text>
                       </View>
                     )}
-                    {isCollapsed && hasSelected && (
-                      <View style={styles.selectedIndicatorPill}>
-                        <Check size={11} color="#38BDF8" strokeWidth={2.8} />
-                        <Text style={styles.selectedIndicatorText}>Selected</Text>
-                      </View>
-                    )}
                   </View>
 
-                  {/* Collapse Icon */}
-                  <View style={styles.collapseIconBox}>
-                    {isCollapsed ? (
-                      <ChevronRight size={16} color="#71717A" strokeWidth={2.2} />
-                    ) : (
-                      <ChevronDown size={16} color="#E4E4E7" strokeWidth={2.2} />
-                    )}
-                  </View>
+                  {isCollapsed && hasSelected && (
+                    <View style={styles.selectedIndicatorPill}>
+                      <Check size={11} color="#38BDF8" strokeWidth={2.8} />
+                      <Text style={styles.selectedIndicatorText}>Selected</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
 
                 {/* Models in Group (Rendered when expanded) */}
@@ -450,26 +444,13 @@ const styles = StyleSheet.create({
   groupHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   groupHeader: {
     fontSize: 12,
     fontWeight: '700',
     color: '#E4E4E7',
     letterSpacing: 0.8,
-  },
-  countBadge: {
-    backgroundColor: '#1E1E24',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  countBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#71717A',
   },
   activePill: {
     backgroundColor: 'rgba(56, 189, 248, 0.12)',
@@ -498,14 +479,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     color: '#38BDF8',
-  },
-  collapseIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#16161A',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   groupCard: {
     backgroundColor: '#16161A',
