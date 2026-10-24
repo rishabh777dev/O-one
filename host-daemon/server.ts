@@ -903,9 +903,9 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
 
         const PROVIDER_METADATA: Record<string, { name: string; engine: string; desc: string }> = {
           'openai-codex': {
-            name: 'ChatGPT / OpenAI Codex',
+            name: 'OpenAI',
             engine: 'hermes',
-            desc: 'Subscribed OpenAI Codex runtime with native code & reasoning',
+            desc: 'ChatGPT & OpenAI Codex models (Codex subscription)',
           },
           'xai-oauth': {
             name: 'xAI Grok (OAuth)',
@@ -995,8 +995,8 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
         groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
 
         // 2. Add Antigravity ACP group
-        groups.push({
-          provider: 'Antigravity CLI ACP',
+        const antigravityGroup = {
+          provider: 'Antigravity',
           slug: 'antigravity',
           engine: 'antigravity',
           isCurrent: false,
@@ -1013,7 +1013,17 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
               desc: 'Sub-second tool latency and instant code edits',
             },
           ],
-        });
+        };
+
+        // Ensure Antigravity is positioned prominently right next to OpenAI at the top
+        const openAiIdx = groups.findIndex(
+          (g) => g.slug === 'openai-codex' || g.provider === 'OpenAI' || g.isCurrent
+        );
+        if (openAiIdx !== -1) {
+          groups.splice(openAiIdx + 1, 0, antigravityGroup);
+        } else {
+          groups.unshift(antigravityGroup);
+        }
 
         ws.send(
           JSON.stringify({

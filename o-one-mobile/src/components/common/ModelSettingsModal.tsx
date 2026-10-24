@@ -8,7 +8,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Check, Cpu, Zap, Brain } from 'lucide-react-native';
+import { X, Check, Cpu, Zap, Brain, ChevronDown, ChevronRight } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { Agent } from '../../types';
 import { rpcClient } from '../../services/rpcClient';
@@ -20,14 +20,48 @@ interface ModelSettingsModalProps {
   onSave: (model: string, reasoning: 'High' | 'Med' | 'Low', engineLabel: string) => void;
 }
 
+export function formatProviderName(raw: string): string {
+  const lower = (raw || '').toLowerCase();
+  if (lower.includes('openai') || lower.includes('chatgpt') || lower.includes('codex')) {
+    return 'OpenAI';
+  }
+  if (lower.includes('antigravity')) {
+    return 'Antigravity';
+  }
+  if (lower.includes('grok') || lower.includes('xai')) {
+    return 'xAI Grok';
+  }
+  if (lower.includes('gemini') || lower.includes('google')) {
+    return 'Google Gemini';
+  }
+  if (lower.includes('claude') || lower.includes('anthropic')) {
+    return 'Anthropic Claude';
+  }
+  if (lower.includes('deepseek')) {
+    return 'DeepSeek';
+  }
+  if (lower.includes('mistral')) {
+    return 'Mistral AI';
+  }
+  if (lower.includes('groq')) {
+    return 'Groq LPUs';
+  }
+  if (lower.includes('nvidia')) {
+    return 'NVIDIA NIM';
+  }
+  return raw;
+}
+
 const PROVIDER_MODELS: {
   provider: string;
   engine: string;
+  isCurrent?: boolean;
   models: { id: string; name: string; desc: string }[];
 }[] = [
   {
-    provider: 'Local Hermes 3 Engine',
+    provider: 'OpenAI',
     engine: 'hermes',
+    isCurrent: true,
     models: [
       {
         id: 'gpt-5.6-luna',
@@ -40,15 +74,16 @@ const PROVIDER_MODELS: {
         desc: 'Fast multimodal code and tool reasoning',
       },
       {
-        id: 'hermes-3-llama-3.1-8b',
-        name: 'Hermes 3 · 8B (Ollama / Local)',
-        desc: 'Fast local reasoning & structured tool execution',
+        id: 'gpt-6-luna',
+        name: 'GPT-6 Luna',
+        desc: 'Frontier reasoning model with extended context',
       },
     ],
   },
   {
-    provider: 'Antigravity CLI ACP',
+    provider: 'Antigravity',
     engine: 'antigravity',
+    isCurrent: false,
     models: [
       {
         id: 'gemini-2.5-pro',
@@ -63,8 +98,9 @@ const PROVIDER_MODELS: {
     ],
   },
   {
-    provider: 'DeepSeek AI',
+    provider: 'DeepSeek',
     engine: 'deepseek',
+    isCurrent: false,
     models: [
       {
         id: 'deepseek-ai/DeepSeek-V3',
@@ -79,8 +115,9 @@ const PROVIDER_MODELS: {
     ],
   },
   {
-    provider: 'Claude Code',
+    provider: 'Anthropic Claude',
     engine: 'claude',
+    isCurrent: false,
     models: [
       {
         id: 'claude-3-7-sonnet',
@@ -103,6 +140,14 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
   const [reasoningLevel, setReasoningLevel] = useState<'High' | 'Med' | 'Low'>(
     agent?.reasoningLevel || 'High'
   );
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (providerKey: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [providerKey]: !prev[providerKey],
+    }));
+  };
 
   useEffect(() => {
     if (agent) {
@@ -115,18 +160,48 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
     if (visible) {
       rpcClient.send('models.list', {}, (res) => {
         if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-          setProviderGroups(res.result);
+          // Normalize names and prioritize OpenAI & Antigravity at the top
+          const list = res.result.map((g: any) => ({
+            ...g,
+            cleanProvider: formatProviderName(g.provider),
+          }));
+
+          list.sort((a: any, b: any) => {
+            const getRank = (item: any) => {
+              if (item.cleanProvider === 'OpenAI') return 0;
+              if (item.cleanProvider === 'Antigravity') return 1;
+              if (item.isCurrent) return 2;
+              return 3;
+            };
+            return getRank(a) - getRank(b);
+          });
+
+          setProviderGroups(list);
+
+          // By default, expand OpenAI, Antigravity, and any provider with selectedModel.
+          // Other secondary providers start collapsed to keep UI clean.
+          const initialCollapsed: Record<string, boolean> = {};
+          list.forEach((g: any) => {
+            const hasSelected = g.models?.some((m: any) => m.id === selectedModel);
+            const isPriority =
+              g.cleanProvider === 'OpenAI' ||
+              g.cleanProvider === 'Antigravity' ||
+              hasSelected ||
+              g.isCurrent;
+            initialCollapsed[g.provider] = !isPriority;
+          });
+          setCollapsedGroups(initialCollapsed);
         }
       });
     }
-  }, [visible]);
+  }, [visible, selectedModel]);
 
   const handleSave = () => {
     // Determine provider label dynamically
-    let label = 'Nous Hermes 3';
+    let label = 'Hermes Agent';
     for (const group of providerGroups) {
       if (group.models.some((m) => m.id === selectedModel)) {
-        label = group.provider;
+        label = formatProviderName(group.provider);
         break;
       }
     }
@@ -202,39 +277,82 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
           </View>
 
           {/* Model Catalog by Provider */}
-          {providerGroups.map((group) => (
-            <View key={group.provider} style={styles.section}>
-              <Text style={styles.groupHeader}>{group.provider.toUpperCase()}</Text>
-              <View style={styles.groupCard}>
-                {group.models.map((m, idx) => {
-                  const isSelected = selectedModel === m.id;
-                  const isLast = idx === group.models.length - 1;
-                  return (
-                    <TouchableOpacity
-                      key={m.id}
-                      style={[styles.modelRow, !isLast && styles.modelRowBorder]}
-                      onPress={() => setSelectedModel(m.id)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[styles.modelName, isSelected && styles.modelNameSelected]}
-                        >
-                          {m.name}
-                        </Text>
-                        <Text style={styles.modelDesc}>{m.desc}</Text>
+          {providerGroups.map((group) => {
+            const displayTitle = formatProviderName(group.provider);
+            const isCollapsed = !!collapsedGroups[group.provider];
+            const hasSelected = group.models.some((m) => m.id === selectedModel);
+
+            return (
+              <View key={group.provider} style={styles.section}>
+                {/* Collapsible Provider Header Row */}
+                <TouchableOpacity
+                  style={styles.groupHeaderRow}
+                  onPress={() => toggleGroup(group.provider)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <View style={styles.groupHeaderLeft}>
+                    <Text style={styles.groupHeader}>{displayTitle.toUpperCase()}</Text>
+                    <View style={styles.countBadge}>
+                      <Text style={styles.countBadgeText}>{group.models.length}</Text>
+                    </View>
+                    {group.isCurrent && (
+                      <View style={styles.activePill}>
+                        <Text style={styles.activePillText}>ACTIVE</Text>
                       </View>
-                      {isSelected && (
-                        <View style={styles.checkIconBox}>
-                          <Check size={16} color={colors.accentEmerald} strokeWidth={2.4} />
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                    )}
+                    {isCollapsed && hasSelected && (
+                      <View style={styles.selectedIndicatorPill}>
+                        <Check size={11} color="#38BDF8" strokeWidth={2.8} />
+                        <Text style={styles.selectedIndicatorText}>Selected</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Collapse Icon */}
+                  <View style={styles.collapseIconBox}>
+                    {isCollapsed ? (
+                      <ChevronRight size={16} color="#71717A" strokeWidth={2.2} />
+                    ) : (
+                      <ChevronDown size={16} color="#E4E4E7" strokeWidth={2.2} />
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {/* Models in Group (Rendered when expanded) */}
+                {!isCollapsed && (
+                  <View style={styles.groupCard}>
+                    {group.models.map((m, idx) => {
+                      const isSelected = selectedModel === m.id;
+                      const isLast = idx === group.models.length - 1;
+                      return (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={[styles.modelRow, !isLast && styles.modelRowBorder]}
+                          onPress={() => setSelectedModel(m.id)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text
+                              style={[styles.modelName, isSelected && styles.modelNameSelected]}
+                            >
+                              {m.name}
+                            </Text>
+                            <Text style={styles.modelDesc}>{m.desc}</Text>
+                          </View>
+                          {isSelected && (
+                            <View style={styles.checkIconBox}>
+                              <Check size={16} color={colors.accentEmerald} strokeWidth={2.4} />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       </View>
     </Modal>
@@ -321,13 +439,73 @@ const styles = StyleSheet.create({
   reasoningBtnTextSelected: {
     color: '#FFFFFF',
   },
-  groupHeader: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#71717A',
-    letterSpacing: 0.8,
-    marginBottom: 8,
+  groupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
     paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  groupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  groupHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#E4E4E7',
+    letterSpacing: 0.8,
+  },
+  countBadge: {
+    backgroundColor: '#1E1E24',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  countBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#71717A',
+  },
+  activePill: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  activePillText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#38BDF8',
+    letterSpacing: 0.5,
+  },
+  selectedIndicatorPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  selectedIndicatorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#38BDF8',
+  },
+  collapseIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#16161A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   groupCard: {
     backgroundColor: '#16161A',

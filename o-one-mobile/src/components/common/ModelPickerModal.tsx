@@ -19,6 +19,7 @@ import {
   Sparkles,
   Zap,
   Layers,
+  ChevronDown,
   ChevronRight,
   ShieldCheck,
 } from 'lucide-react-native';
@@ -26,6 +27,7 @@ import { colors } from '../../theme/colors';
 import { rpcClient } from '../../services/rpcClient';
 import { useAppStore } from '../../store/useAppStore';
 import { Agent } from '../../types';
+import { formatProviderName } from './ModelSettingsModal';
 
 interface ModelItem {
   id: string;
@@ -65,15 +67,51 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
   const [activeProvider, setActiveProvider] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSwitching, setIsSwitching] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (key: string) => {
+    setCollapsedGroups((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
 
   const fetchModels = () => {
     setLoading(true);
     rpcClient.send('models.list', {}, (res) => {
       setLoading(false);
       if (res.result && Array.isArray(res.result)) {
-        setGroups(res.result);
+        const list = res.result.map((g: any) => ({
+          ...g,
+          provider: formatProviderName(g.provider),
+        }));
+
+        list.sort((a: any, b: any) => {
+          const getRank = (item: any) => {
+            if (item.provider === 'OpenAI') return 0;
+            if (item.provider === 'Antigravity') return 1;
+            if (item.isCurrent) return 2;
+            return 3;
+          };
+          return getRank(a) - getRank(b);
+        });
+
+        setGroups(list);
         if (res.activeModel) setActiveModel(res.activeModel);
         if (res.activeProvider) setActiveProvider(res.activeProvider);
+
+        const initialCollapsed: Record<string, boolean> = {};
+        const curModel = agent?.model || res.activeModel;
+        list.forEach((g: any) => {
+          const hasSelected = g.models?.some((m: any) => m.id === curModel);
+          const isPriority =
+            g.provider === 'OpenAI' ||
+            g.provider === 'Antigravity' ||
+            hasSelected ||
+            g.isCurrent;
+          initialCollapsed[g.slug || g.provider] = !isPriority;
+        });
+        setCollapsedGroups(initialCollapsed);
       }
     });
   };
@@ -189,82 +227,106 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {filteredGroups.map((group) => (
-              <View key={group.slug || group.provider} style={styles.groupCard}>
-                {/* Group Header */}
-                <View style={styles.groupHeaderRow}>
-                  <View style={styles.groupIconBox}>
-                    <Cpu size={16} color="#38BDF8" />
-                  </View>
-                  <View style={styles.groupTitleCol}>
-                    <View style={styles.groupNameRow}>
-                      <Text style={styles.groupName}>{group.provider}</Text>
-                      {group.isCurrent && (
-                        <View style={styles.activePill}>
-                          <Text style={styles.activePillText}>ACTIVE PROVIDER</Text>
+            {filteredGroups.map((group) => {
+              const groupKey = group.slug || group.provider;
+              const isCollapsed = !!collapsedGroups[groupKey];
+
+              return (
+                <View key={groupKey} style={styles.groupCard}>
+                  {/* Collapsible Group Header */}
+                  <TouchableOpacity
+                    style={[
+                      styles.groupHeaderRow,
+                      isCollapsed && { borderBottomWidth: 0 },
+                    ]}
+                    onPress={() => toggleGroup(groupKey)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.groupIconBox}>
+                      <Cpu size={16} color="#38BDF8" />
+                    </View>
+                    <View style={styles.groupTitleCol}>
+                      <View style={styles.groupNameRow}>
+                        <Text style={styles.groupName}>{group.provider}</Text>
+                        <View style={styles.countPill}>
+                          <Text style={styles.countPillText}>{group.models.length}</Text>
                         </View>
+                        {group.isCurrent && (
+                          <View style={styles.activePill}>
+                            <Text style={styles.activePillText}>ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.groupDesc} numberOfLines={1}>
+                        {group.desc}
+                      </Text>
+                    </View>
+                    <View style={styles.collapseIconBox}>
+                      {isCollapsed ? (
+                        <ChevronRight size={16} color="#71717A" strokeWidth={2.4} />
+                      ) : (
+                        <ChevronDown size={16} color="#E4E4E7" strokeWidth={2.4} />
                       )}
                     </View>
-                    <Text style={styles.groupDesc} numberOfLines={1}>
-                      {group.desc}
-                    </Text>
-                  </View>
-                </View>
+                  </TouchableOpacity>
 
-                {/* Models in Group */}
-                <View style={styles.modelList}>
-                  {group.models.map((model, idx) => {
-                    const isSelected =
-                      model.id === currentSelectedModel ||
-                      (model.isCurrent && !agent?.model);
-                    const isProcessing = isSwitching === model.id;
-                    const isLast = idx === group.models.length - 1;
+                  {/* Models in Group */}
+                  {!isCollapsed && (
+                    <View style={styles.modelList}>
+                      {group.models.map((model, idx) => {
+                        const isSelected =
+                          model.id === currentSelectedModel ||
+                          (model.isCurrent && !agent?.model);
+                        const isProcessing = isSwitching === model.id;
+                        const isLast = idx === group.models.length - 1;
 
-                    return (
-                      <TouchableOpacity
-                        key={model.id}
-                        style={[
-                          styles.modelRow,
-                          isSelected && styles.modelRowSelected,
-                          isLast && { borderBottomWidth: 0 },
-                        ]}
-                        onPress={() => handleSelect(group, model)}
-                        disabled={isProcessing}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.modelInfoCol}>
-                          <View style={styles.modelNameRow}>
-                            <Text
-                              style={[
-                                styles.modelName,
-                                isSelected && { color: '#38BDF8', fontWeight: '700' },
-                              ]}
-                            >
-                              {model.name}
-                            </Text>
-                            {isSelected && (
-                              <View style={styles.selectedBadge}>
-                                <Check size={11} color="#38BDF8" strokeWidth={2.8} />
-                                <Text style={styles.selectedBadgeText}>Selected</Text>
+                        return (
+                          <TouchableOpacity
+                            key={model.id}
+                            style={[
+                              styles.modelRow,
+                              isSelected && styles.modelRowSelected,
+                              isLast && { borderBottomWidth: 0 },
+                            ]}
+                            onPress={() => handleSelect(group, model)}
+                            disabled={isProcessing}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.modelInfoCol}>
+                              <View style={styles.modelNameRow}>
+                                <Text
+                                  style={[
+                                    styles.modelName,
+                                    isSelected && { color: '#38BDF8', fontWeight: '700' },
+                                  ]}
+                                >
+                                  {model.name}
+                                </Text>
+                                {isSelected && (
+                                  <View style={styles.selectedBadge}>
+                                    <Check size={11} color="#38BDF8" strokeWidth={2.8} />
+                                    <Text style={styles.selectedBadgeText}>Selected</Text>
+                                  </View>
+                                )}
                               </View>
-                            )}
-                          </View>
-                          <Text style={styles.modelDesc} numberOfLines={2}>
-                            {model.desc}
-                          </Text>
-                        </View>
+                              <Text style={styles.modelDesc} numberOfLines={2}>
+                                {model.desc}
+                              </Text>
+                            </View>
 
-                        {isProcessing ? (
-                          <ActivityIndicator size="small" color="#38BDF8" />
-                        ) : (
-                          <ChevronRight size={16} color="#52525B" />
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
+                            {isProcessing ? (
+                              <ActivityIndicator size="small" color="#38BDF8" />
+                            ) : (
+                              <ChevronRight size={16} color="#52525B" />
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </ScrollView>
         )}
       </View>
@@ -384,6 +446,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  countPill: {
+    backgroundColor: '#27272E',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  countPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#A1A1AA',
+  },
+  collapseIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activePill: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
