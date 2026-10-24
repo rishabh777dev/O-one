@@ -275,17 +275,20 @@ const TerminalPanel: React.FC<{ agent: Agent; onClose: () => void }> = ({ agent,
     setIsRunning(true);
 
     rpcClient.send(
-      'cmd.run',
-      { command: trimmed, cwd: agent.workspacePath || process.cwd() },
+      'terminal.execute',
+      { command: trimmed, cwd: agent.workspacePath || process.cwd(), shellType: 'powershell' },
       (res) => {
-        setIsRunning(false);
         if (res.type === 'stdout' && res.data) {
           setLogs((prev) => [...prev, res.data.trim()]);
         } else if (res.type === 'stderr' && res.data) {
           setLogs((prev) => [...prev, `[stderr] ${res.data.trim()}`]);
-        } else if (res.type === 'done') {
-          setLogs((prev) => [...prev, `Process exited with code ${res.exitCode}`]);
+        } else if (res.type === 'done' || res.result) {
+          setIsRunning(false);
+          if (res.exitCode !== undefined && res.exitCode !== 0) {
+            setLogs((prev) => [...prev, `Exit code ${res.exitCode}`]);
+          }
         } else if (res.error) {
+          setIsRunning(false);
           setLogs((prev) => [...prev, `Error: ${res.error}`]);
         }
       }

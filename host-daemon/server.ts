@@ -394,9 +394,10 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     // -------------------------------------------------------------
     // 3. INTERACTIVE TERMINAL / LINUX KERNEL / PHONE COMMAND RUNNER
     // -------------------------------------------------------------
+    case 'cmd.run':
     case 'terminal.execute': {
       const command = params.command || '';
-      const shellType = params.shellType || 'wsl'; // 'wsl' | 'powershell' | 'cmd' | 'phone' | 'bash'
+      const shellType = params.shellType || (isWin ? 'powershell' : 'bash'); // 'wsl' | 'powershell' | 'cmd' | 'phone' | 'bash'
       const cwd = params.cwd || process.cwd();
 
       // Terminate any previous hanging process if still running
