@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronRight,
   ShieldCheck,
+  Brain,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { rpcClient } from '../../services/rpcClient';
@@ -83,15 +84,16 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
       if (res.result && Array.isArray(res.result)) {
         const list = res.result.map((g: any) => ({
           ...g,
-          provider: formatProviderName(g.provider),
+          provider: formatProviderName(g.provider, g.slug),
         }));
 
         list.sort((a: any, b: any) => {
           const getRank = (item: any) => {
             if (item.provider === 'OpenAI') return 0;
-            if (item.provider === 'Antigravity') return 1;
-            if (item.isCurrent) return 2;
-            return 3;
+            if (item.provider.includes('OpenCode')) return 1;
+            if (item.provider.includes('Antigravity')) return 2;
+            if (item.isCurrent) return 3;
+            return 4;
           };
           return getRank(a) - getRank(b);
         });
@@ -106,7 +108,7 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
           const hasSelected = g.models?.some((m: any) => m.id === curModel);
           const isPriority =
             g.provider === 'OpenAI' ||
-            g.provider === 'Antigravity' ||
+            g.provider.includes('OpenCode') ||
             hasSelected ||
             g.isCurrent;
           initialCollapsed[g.slug || g.provider] = !isPriority;
@@ -174,6 +176,121 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
     })
     .filter((g) => g.models.length > 0);
 
+  const hermesFiltered = filteredGroups.filter(
+    (g: any) =>
+      g.category === 'hermes' ||
+      (!g.category &&
+        g.slug !== 'opencode-cli' &&
+        g.slug !== 'antigravity' &&
+        g.slug !== 'claude-cli' &&
+        !g.provider.toLowerCase().includes('cli'))
+  );
+
+  const standaloneFiltered = filteredGroups.filter(
+    (g: any) =>
+      g.category === 'standalone' ||
+      g.slug === 'opencode-cli' ||
+      g.slug === 'antigravity' ||
+      g.slug === 'claude-cli' ||
+      g.provider.toLowerCase().includes('cli')
+  );
+
+  const renderPickerGroup = (group: ProviderGroup) => {
+    const groupKey = group.slug || group.provider;
+    const isCollapsed = !!collapsedGroups[groupKey];
+
+    return (
+      <View key={groupKey} style={styles.groupCard}>
+        {/* Collapsible Group Header */}
+        <TouchableOpacity
+          style={[
+            styles.groupHeaderRow,
+            isCollapsed && { borderBottomWidth: 0 },
+          ]}
+          onPress={() => toggleGroup(groupKey)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.groupIconBox}>
+            <Cpu size={16} color="#38BDF8" />
+          </View>
+          <View style={styles.groupTitleCol}>
+            <View style={styles.groupNameRow}>
+              <Text style={styles.groupName}>{group.provider}</Text>
+              {isCollapsed ? (
+                <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
+              ) : (
+                <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
+              )}
+              {group.isCurrent && (
+                <View style={styles.activePill}>
+                  <Text style={styles.activePillText}>ACTIVE</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.groupDesc} numberOfLines={1}>
+              {group.desc}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Models in Group */}
+        {!isCollapsed && (
+          <View style={styles.modelList}>
+            {group.models.map((model, idx) => {
+              const isSelected =
+                model.id === currentSelectedModel ||
+                (model.isCurrent && !agent?.model);
+              const isProcessing = isSwitching === model.id;
+              const isLast = idx === group.models.length - 1;
+
+              return (
+                <TouchableOpacity
+                  key={model.id}
+                  style={[
+                    styles.modelRow,
+                    isSelected && styles.modelRowSelected,
+                    isLast && { borderBottomWidth: 0 },
+                  ]}
+                  onPress={() => handleSelect(group, model)}
+                  disabled={isProcessing}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.modelInfoCol}>
+                    <View style={styles.modelNameRow}>
+                      <Text
+                        style={[
+                          styles.modelName,
+                          isSelected && { color: '#38BDF8', fontWeight: '700' },
+                        ]}
+                      >
+                        {model.name}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.selectedBadge}>
+                          <Check size={11} color="#38BDF8" strokeWidth={2.8} />
+                          <Text style={styles.selectedBadgeText}>Selected</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.modelDesc} numberOfLines={2}>
+                      {model.desc}
+                    </Text>
+                  </View>
+
+                  {isProcessing ? (
+                    <ActivityIndicator size="small" color="#38BDF8" />
+                  ) : (
+                    <ChevronRight size={16} color="#52525B" />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View
@@ -227,101 +344,41 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {filteredGroups.map((group) => {
-              const groupKey = group.slug || group.provider;
-              const isCollapsed = !!collapsedGroups[groupKey];
-
-              return (
-                <View key={groupKey} style={styles.groupCard}>
-                  {/* Collapsible Group Header */}
-                  <TouchableOpacity
-                    style={[
-                      styles.groupHeaderRow,
-                      isCollapsed && { borderBottomWidth: 0 },
-                    ]}
-                    onPress={() => toggleGroup(groupKey)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.groupIconBox}>
-                      <Cpu size={16} color="#38BDF8" />
-                    </View>
-                    <View style={styles.groupTitleCol}>
-                      <View style={styles.groupNameRow}>
-                        <Text style={styles.groupName}>{group.provider}</Text>
-                        {isCollapsed ? (
-                          <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
-                        ) : (
-                          <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
-                        )}
-                        {group.isCurrent && (
-                          <View style={styles.activePill}>
-                            <Text style={styles.activePillText}>ACTIVE</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.groupDesc} numberOfLines={1}>
-                        {group.desc}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Models in Group */}
-                  {!isCollapsed && (
-                    <View style={styles.modelList}>
-                      {group.models.map((model, idx) => {
-                        const isSelected =
-                          model.id === currentSelectedModel ||
-                          (model.isCurrent && !agent?.model);
-                        const isProcessing = isSwitching === model.id;
-                        const isLast = idx === group.models.length - 1;
-
-                        return (
-                          <TouchableOpacity
-                            key={model.id}
-                            style={[
-                              styles.modelRow,
-                              isSelected && styles.modelRowSelected,
-                              isLast && { borderBottomWidth: 0 },
-                            ]}
-                            onPress={() => handleSelect(group, model)}
-                            disabled={isProcessing}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.modelInfoCol}>
-                              <View style={styles.modelNameRow}>
-                                <Text
-                                  style={[
-                                    styles.modelName,
-                                    isSelected && { color: '#38BDF8', fontWeight: '700' },
-                                  ]}
-                                >
-                                  {model.name}
-                                </Text>
-                                {isSelected && (
-                                  <View style={styles.selectedBadge}>
-                                    <Check size={11} color="#38BDF8" strokeWidth={2.8} />
-                                    <Text style={styles.selectedBadgeText}>Selected</Text>
-                                  </View>
-                                )}
-                              </View>
-                              <Text style={styles.modelDesc} numberOfLines={2}>
-                                {model.desc}
-                              </Text>
-                            </View>
-
-                            {isProcessing ? (
-                              <ActivityIndicator size="small" color="#38BDF8" />
-                            ) : (
-                              <ChevronRight size={16} color="#52525B" />
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
+            {/* 1. HERMES AGENT ENGINE SECTION */}
+            <View style={styles.hierarchyCategoryHeader}>
+              <View style={styles.hierarchyTitleRow}>
+                <Brain size={14} color="#F97316" />
+                <Text style={styles.hierarchyTitle}>HERMES AGENT ENGINE</Text>
+                <View style={styles.runtimePill}>
+                  <Text style={styles.runtimePillText}>HOST RUNTIME</Text>
                 </View>
-              );
-            })}
+              </View>
+              <Text style={styles.hierarchySubtitle}>
+                Providers running inside Hermes with terminal, tools, memory & skills
+              </Text>
+            </View>
+
+            {hermesFiltered.map(renderPickerGroup)}
+
+            {/* 2. STANDALONE CLI ENGINES SECTION */}
+            {standaloneFiltered.length > 0 && (
+              <>
+                <View style={[styles.hierarchyCategoryHeader, { marginTop: 16 }]}>
+                  <View style={styles.hierarchyTitleRow}>
+                    <Cpu size={14} color="#38BDF8" />
+                    <Text style={styles.hierarchyTitle}>STANDALONE CLI ENGINES</Text>
+                    <View style={[styles.runtimePill, styles.wsPill]}>
+                      <Text style={[styles.runtimePillText, styles.wsPillText]}>DIRECT VIA WS</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.hierarchySubtitle}>
+                    Direct CLI agents on your computer, accessible from phone via WebSocket
+                  </Text>
+                </View>
+
+                {standaloneFiltered.map(renderPickerGroup)}
+              </>
+            )}
           </ScrollView>
         )}
       </View>
@@ -403,6 +460,48 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 24,
     gap: 14,
+  },
+  hierarchyCategoryHeader: {
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  hierarchyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 3,
+  },
+  hierarchyTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#E4E4E7',
+    letterSpacing: 0.8,
+  },
+  hierarchySubtitle: {
+    fontSize: 11,
+    color: '#71717A',
+    lineHeight: 15,
+  },
+  runtimePill: {
+    backgroundColor: 'rgba(249, 115, 22, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+  },
+  runtimePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#F97316',
+    letterSpacing: 0.5,
+  },
+  wsPill: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  wsPillText: {
+    color: '#38BDF8',
   },
   groupCard: {
     backgroundColor: '#141418',

@@ -392,6 +392,39 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     }
 
     // -------------------------------------------------------------
+    // 2b. OPENCODE ENGINE RUNNER (DIRECT VIA WS)
+    // -------------------------------------------------------------
+    case 'opencode.run': {
+      const prompt = params.prompt || '';
+      const cwd = params.cwd || process.cwd();
+      const model = params.model;
+
+      const opencodeArgs = ['run', prompt];
+      if (model && !model.includes('default')) {
+        opencodeArgs.push('-m', model.replace('opencode/', ''));
+      }
+
+      console.log(`[O1 Host Daemon] Spawning: opencode ${opencodeArgs.join(' ')}`);
+      const child = spawn(isWin ? 'opencode.cmd' : 'opencode', opencodeArgs, {
+        cwd,
+        shell: isWin,
+      });
+
+      child.stdout.on('data', (data) => {
+        ws.send(JSON.stringify({ id, type: 'stream_token', token: data.toString() }));
+      });
+
+      child.stderr.on('data', (data) => {
+        ws.send(JSON.stringify({ id, type: 'stderr', data: data.toString() }));
+      });
+
+      child.on('close', (code) => {
+        ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+      });
+      break;
+    }
+
+    // -------------------------------------------------------------
     // 3. INTERACTIVE TERMINAL / LINUX KERNEL / PHONE COMMAND RUNNER
     // -------------------------------------------------------------
     case 'cmd.run':
@@ -475,6 +508,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     case 'tools.detectCLIs': {
       const cliChecks = [
         { id: 'hermes', name: 'Hermes Agent', bin: hermesBin, installCmd: 'npm install -g hermes-agent || pip install hermes-agent' },
+        { id: 'opencode', name: 'OpenCode CLI', bin: 'opencode', installCmd: 'npm install -g opencode' },
         { id: 'antigravity', name: 'Antigravity CLI ACP', bin: 'agy', installCmd: 'npm install -g @google/antigravity' },
         { id: 'claude', name: 'Claude Code CLI', bin: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-code' },
         { id: 'ollama', name: 'Ollama Local LLM', bin: 'ollama', installCmd: 'curl -fsSL https://ollama.com/install.sh | sh' },
@@ -907,46 +941,51 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             engine: 'hermes',
             desc: 'ChatGPT & OpenAI Codex models (Codex subscription)',
           },
-          'xai-oauth': {
-            name: 'xAI Grok (OAuth)',
+          'opencode-free': {
+            name: 'OpenCode (Free)',
             engine: 'hermes',
-            desc: 'SuperGrok & Grok 4.x frontier models',
+            desc: 'Free coding intelligence models inside Hermes (Jev & Muse)',
+          },
+          'xai-oauth': {
+            name: 'xAI Grok',
+            engine: 'hermes',
+            desc: 'SuperGrok & Grok frontier models inside Hermes',
           },
           'gemini': {
-            name: 'Google AI Studio (Gemini)',
+            name: 'Google Gemini',
             engine: 'hermes',
-            desc: 'Gemini 3.7 / 3.8 / 4.0 models with deep context & tool calls',
+            desc: 'Gemini models with deep context & tool calls inside Hermes',
           },
           'openrouter': {
-            name: 'OpenRouter (Multi-Model)',
-            engine: 'openrouter',
-            desc: 'Anthropic Claude, DeepSeek, Qwen & open-weight routing',
+            name: 'OpenRouter',
+            engine: 'hermes',
+            desc: 'Claude, DeepSeek & multi-model routing inside Hermes',
           },
           'groq': {
             name: 'Groq LPUs',
             engine: 'hermes',
-            desc: 'Ultra-low latency Llama & Compound models',
+            desc: 'Ultra-low latency models inside Hermes',
           },
           'mistral': {
             name: 'Mistral AI',
             engine: 'hermes',
-            desc: 'Mistral Large, Codestral & reasoning models',
+            desc: 'Codestral & reasoning models inside Hermes',
           },
           'nvidia': {
             name: 'NVIDIA NIM',
             engine: 'hermes',
-            desc: 'Nemotron & accelerated inference catalog',
+            desc: 'Nemotron accelerated inference catalog inside Hermes',
           },
           'tokenrouter': {
             name: 'TokenRouter',
             engine: 'hermes',
-            desc: 'Free and community token routing catalog',
+            desc: 'Community token routing inside Hermes',
           },
         };
 
         const groups: any[] = [];
 
-        // 1. First group: Active Hermes Provider (Primary)
+        // 1. HERMES AGENT ENGINE PROVIDERS (Inside Hermes Runtime)
         for (const [slug, data] of Object.entries(cachedProviders)) {
           const meta = PROVIDER_METADATA[slug] || {
             name: slug.toUpperCase(),
@@ -957,6 +996,11 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             activeHermesProvider.toLowerCase().includes(slug) ||
             (slug === 'openai-codex' && activeHermesProvider.toLowerCase().includes('chatgpt'));
 
+          let providerDisplayName = meta.name;
+          if (slug.includes('mistral.ai')) providerDisplayName = 'Mistral AI';
+          else if (slug.includes('meta.ai')) providerDisplayName = 'Meta AI';
+          else if (slug.includes('experientiallabs')) providerDisplayName = 'Experiential Labs';
+
           const modelItems = (data.models || []).slice(0, 16).map((mId: string) => {
             const isCurrent = mId === activeHermesModel;
             let displayTitle = mId;
@@ -966,7 +1010,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             return {
               id: mId,
               name: displayTitle,
-              desc: isCurrent ? `Currently active on host (${activeHermesProvider})` : `Available on ${meta.name}`,
+              desc: isCurrent ? `Currently active in Hermes (${activeHermesProvider})` : `Available via ${providerDisplayName} in Hermes`,
               isCurrent,
             };
           });
@@ -976,61 +1020,97 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             modelItems.unshift({
               id: activeHermesModel,
               name: activeHermesModel,
-              desc: `Currently active on host (${activeHermesProvider})`,
+              desc: `Currently active in Hermes (${activeHermesProvider})`,
               isCurrent: true,
             });
           }
 
           groups.push({
-            provider: meta.name,
+            provider: providerDisplayName,
             slug,
             engine: meta.engine,
+            category: 'hermes',
             isCurrent: isCurrentProvider,
             desc: meta.desc,
             models: modelItems,
           });
         }
 
-        // Sort so the currently active provider is at the very top
+        // Sort Hermes providers so the currently active provider is at the top
         groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
 
-        // 2. Add Antigravity ACP group
-        const antigravityGroup = {
-          provider: 'Antigravity',
-          slug: 'antigravity',
-          engine: 'antigravity',
-          isCurrent: false,
-          desc: 'Google Deepmind Advanced Agentic Coding CLI',
-          models: [
-            {
-              id: 'gemini-2.5-pro',
-              name: 'Gemini 2.5 Pro (Antigravity)',
-              desc: 'Autonomous multi-file planning, git diffs & code execution',
-            },
-            {
-              id: 'gemini-2.5-flash',
-              name: 'Gemini 2.5 Flash',
-              desc: 'Sub-second tool latency and instant code edits',
-            },
-          ],
-        };
+        // 2. STANDALONE ENGINES (Direct CLI on Host PC, accessible via WebSocket)
+        const standaloneEngines: any[] = [
+          {
+            provider: 'OpenCode CLI',
+            slug: 'opencode-cli',
+            engine: 'opencode',
+            category: 'standalone',
+            isCurrent: false,
+            desc: 'Direct OpenCode runtime on host PC (opencode run / serve via WS)',
+            models: [
+              {
+                id: 'opencode/default',
+                name: 'OpenCode Default Agent',
+                desc: 'Full-capability OpenCode CLI engine on host PC',
+              },
+              {
+                id: 'opencode/jev',
+                name: 'OpenCode Jev 1.13',
+                desc: 'TypeSafe reasoning & code decision model via OpenCode CLI',
+              },
+              {
+                id: 'opencode/muse-spark',
+                name: 'OpenCode Muse Spark',
+                desc: 'High-speed code synthesis and refactoring via OpenCode CLI',
+              },
+            ],
+          },
+          {
+            provider: 'Antigravity CLI ACP',
+            slug: 'antigravity',
+            engine: 'antigravity',
+            category: 'standalone',
+            isCurrent: false,
+            desc: 'Google Deepmind Advanced Agentic Coding CLI (agy on host PC)',
+            models: [
+              {
+                id: 'gemini-2.5-pro',
+                name: 'Gemini 2.5 Pro (Antigravity)',
+                desc: 'Autonomous multi-file planning, git diffs & code execution',
+              },
+              {
+                id: 'gemini-2.5-flash',
+                name: 'Gemini 2.5 Flash',
+                desc: 'Sub-second tool latency and instant code edits',
+              },
+            ],
+          },
+          {
+            provider: 'Claude Code CLI',
+            slug: 'claude-cli',
+            engine: 'claude',
+            category: 'standalone',
+            isCurrent: false,
+            desc: 'Anthropic Claude Code CLI on host PC',
+            models: [
+              {
+                id: 'claude-3-7-sonnet',
+                name: 'Claude 3.7 Sonnet (Claude Code)',
+                desc: 'Hybrid reasoning and deep codebase exploration',
+              },
+            ],
+          },
+        ];
 
-        // Ensure Antigravity is positioned prominently right next to OpenAI at the top
-        const openAiIdx = groups.findIndex(
-          (g) => g.slug === 'openai-codex' || g.provider === 'OpenAI' || g.isCurrent
-        );
-        if (openAiIdx !== -1) {
-          groups.splice(openAiIdx + 1, 0, antigravityGroup);
-        } else {
-          groups.unshift(antigravityGroup);
-        }
+        const allGroups = [...groups, ...standaloneEngines];
 
         ws.send(
           JSON.stringify({
             id,
             activeModel: activeHermesModel,
             activeProvider: activeHermesProvider,
-            result: groups,
+            result: allGroups,
           })
         );
       } catch (err: any) {

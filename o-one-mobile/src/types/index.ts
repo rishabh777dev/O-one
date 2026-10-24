@@ -34,7 +34,7 @@ export interface HostInfo {
   mode: HostMode;
 }
 
-export type AgentEngine = 'hermes' | 'antigravity' | 'claude' | 'codex' | 'linux_shell';
+export type AgentEngine = 'hermes' | 'antigravity' | 'claude' | 'codex' | 'opencode' | 'linux_shell';
 
 export interface Agent {
   id: string;

@@ -242,7 +242,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       return;
     }
 
-    const rpcMethod = agent.engine === 'antigravity' ? 'antigravity.run' : 'hermes.chat';
+    let rpcMethod = 'hermes.chat';
+    if (agent.engine === 'antigravity') {
+      rpcMethod = 'antigravity.run';
+    } else if (agent.engine === 'opencode' || (agent.model && agent.model.startsWith('opencode/'))) {
+      rpcMethod = 'opencode.run';
+    }
 
     rpcClient.send(
       rpcMethod,

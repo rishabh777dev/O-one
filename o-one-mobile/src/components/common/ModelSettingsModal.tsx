@@ -20,13 +20,20 @@ interface ModelSettingsModalProps {
   onSave: (model: string, reasoning: 'High' | 'Med' | 'Low', engineLabel: string) => void;
 }
 
-export function formatProviderName(raw: string): string {
+export function formatProviderName(raw: string, slug?: string): string {
   const lower = (raw || '').toLowerCase();
+  const slugLower = (slug || '').toLowerCase();
+  if (slugLower === 'opencode-cli' || lower === 'opencode cli') {
+    return 'OpenCode CLI';
+  }
   if (lower.includes('openai') || lower.includes('chatgpt') || lower.includes('codex')) {
     return 'OpenAI';
   }
   if (lower.includes('antigravity')) {
-    return 'Antigravity';
+    return 'Antigravity CLI ACP';
+  }
+  if (lower.includes('opencode')) {
+    return 'OpenCode';
   }
   if (lower.includes('grok') || lower.includes('xai')) {
     return 'xAI Grok';
@@ -48,6 +55,12 @@ export function formatProviderName(raw: string): string {
   }
   if (lower.includes('nvidia')) {
     return 'NVIDIA NIM';
+  }
+  if (lower.includes('meta.ai') || lower.includes('meta ai')) {
+    return 'Meta AI';
+  }
+  if (lower.includes('experiential')) {
+    return 'Experiential Labs';
   }
   return raw;
 }
@@ -160,32 +173,34 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
     if (visible) {
       rpcClient.send('models.list', {}, (res) => {
         if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-          // Normalize names and prioritize OpenAI & Antigravity at the top
           const list = res.result.map((g: any) => ({
             ...g,
-            cleanProvider: formatProviderName(g.provider),
+            cleanProvider: formatProviderName(g.provider, g.slug),
           }));
 
+          // Sort within category: OpenAI first, then OpenCode, then others
           list.sort((a: any, b: any) => {
             const getRank = (item: any) => {
               if (item.cleanProvider === 'OpenAI') return 0;
-              if (item.cleanProvider === 'Antigravity') return 1;
-              if (item.isCurrent) return 2;
-              return 3;
+              if (item.cleanProvider === 'OpenCode' || item.cleanProvider === 'OpenCode (Free)') return 1;
+              if (item.cleanProvider === 'OpenCode CLI') return 2;
+              if (item.cleanProvider.includes('Antigravity')) return 3;
+              if (item.isCurrent) return 4;
+              return 5;
             };
             return getRank(a) - getRank(b);
           });
 
           setProviderGroups(list);
 
-          // By default, expand OpenAI, Antigravity, and any provider with selectedModel.
-          // Other secondary providers start collapsed to keep UI clean.
+          // By default expand OpenAI, OpenCode, and any provider with selectedModel
           const initialCollapsed: Record<string, boolean> = {};
           list.forEach((g: any) => {
             const hasSelected = g.models?.some((m: any) => m.id === selectedModel);
             const isPriority =
               g.cleanProvider === 'OpenAI' ||
-              g.cleanProvider === 'Antigravity' ||
+              g.cleanProvider === 'OpenCode' ||
+              g.cleanProvider === 'OpenCode CLI' ||
               hasSelected ||
               g.isCurrent;
             initialCollapsed[g.provider] = !isPriority;
@@ -200,13 +215,103 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
     // Determine provider label dynamically
     let label = 'Hermes Agent';
     for (const group of providerGroups) {
-      if (group.models.some((m) => m.id === selectedModel)) {
-        label = formatProviderName(group.provider);
+      if (group.models.some((m: any) => m.id === selectedModel)) {
+        label = formatProviderName(group.provider, (group as any).slug);
         break;
       }
     }
     onSave(selectedModel, reasoningLevel, label);
     onClose();
+  };
+
+  const hermesGroups = providerGroups.filter(
+    (g: any) =>
+      g.category === 'hermes' ||
+      (!g.category &&
+        g.slug !== 'opencode-cli' &&
+        g.slug !== 'antigravity' &&
+        g.slug !== 'claude-cli' &&
+        !g.provider.toLowerCase().includes('cli'))
+  );
+
+  const standaloneGroups = providerGroups.filter(
+    (g: any) =>
+      g.category === 'standalone' ||
+      g.slug === 'opencode-cli' ||
+      g.slug === 'antigravity' ||
+      g.slug === 'claude-cli' ||
+      g.provider.toLowerCase().includes('cli')
+  );
+
+  const renderGroup = (group: any) => {
+    const displayTitle = formatProviderName(group.provider, group.slug);
+    const isCollapsed = !!collapsedGroups[group.provider];
+    const hasSelected = group.models.some((m: any) => m.id === selectedModel);
+
+    return (
+      <View key={group.provider} style={styles.section}>
+        {/* Collapsible Provider Header Row */}
+        <TouchableOpacity
+          style={styles.groupHeaderRow}
+          onPress={() => toggleGroup(group.provider)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <View style={styles.groupHeaderLeft}>
+            <Text style={styles.groupHeader}>{displayTitle.toUpperCase()}</Text>
+            {isCollapsed ? (
+              <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
+            ) : (
+              <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
+            )}
+            {group.isCurrent && (
+              <View style={styles.activePill}>
+                <Text style={styles.activePillText}>ACTIVE</Text>
+              </View>
+            )}
+          </View>
+
+          {isCollapsed && hasSelected && (
+            <View style={styles.selectedIndicatorPill}>
+              <Check size={11} color="#38BDF8" strokeWidth={2.8} />
+              <Text style={styles.selectedIndicatorText}>Selected</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        {/* Models in Group (Rendered when expanded) */}
+        {!isCollapsed && (
+          <View style={styles.groupCard}>
+            {group.models.map((m: any, idx: number) => {
+              const isSelected = selectedModel === m.id;
+              const isLast = idx === group.models.length - 1;
+              return (
+                <TouchableOpacity
+                  key={m.id}
+                  style={[styles.modelRow, !isLast && styles.modelRowBorder]}
+                  onPress={() => setSelectedModel(m.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[styles.modelName, isSelected && styles.modelNameSelected]}
+                    >
+                      {m.name}
+                    </Text>
+                    <Text style={styles.modelDesc}>{m.desc}</Text>
+                  </View>
+                  {isSelected && (
+                    <View style={styles.checkIconBox}>
+                      <Check size={16} color={colors.accentEmerald} strokeWidth={2.4} />
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -276,77 +381,41 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
             </View>
           </View>
 
-          {/* Model Catalog by Provider */}
-          {providerGroups.map((group) => {
-            const displayTitle = formatProviderName(group.provider);
-            const isCollapsed = !!collapsedGroups[group.provider];
-            const hasSelected = group.models.some((m) => m.id === selectedModel);
-
-            return (
-              <View key={group.provider} style={styles.section}>
-                {/* Collapsible Provider Header Row */}
-                <TouchableOpacity
-                  style={styles.groupHeaderRow}
-                  onPress={() => toggleGroup(group.provider)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <View style={styles.groupHeaderLeft}>
-                    <Text style={styles.groupHeader}>{displayTitle.toUpperCase()}</Text>
-                    {isCollapsed ? (
-                      <ChevronRight size={14} color="#71717A" strokeWidth={2.4} />
-                    ) : (
-                      <ChevronDown size={14} color="#A1A1AA" strokeWidth={2.4} />
-                    )}
-                    {group.isCurrent && (
-                      <View style={styles.activePill}>
-                        <Text style={styles.activePillText}>ACTIVE</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {isCollapsed && hasSelected && (
-                    <View style={styles.selectedIndicatorPill}>
-                      <Check size={11} color="#38BDF8" strokeWidth={2.8} />
-                      <Text style={styles.selectedIndicatorText}>Selected</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                {/* Models in Group (Rendered when expanded) */}
-                {!isCollapsed && (
-                  <View style={styles.groupCard}>
-                    {group.models.map((m, idx) => {
-                      const isSelected = selectedModel === m.id;
-                      const isLast = idx === group.models.length - 1;
-                      return (
-                        <TouchableOpacity
-                          key={m.id}
-                          style={[styles.modelRow, !isLast && styles.modelRowBorder]}
-                          onPress={() => setSelectedModel(m.id)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text
-                              style={[styles.modelName, isSelected && styles.modelNameSelected]}
-                            >
-                              {m.name}
-                            </Text>
-                            <Text style={styles.modelDesc}>{m.desc}</Text>
-                          </View>
-                          {isSelected && (
-                            <View style={styles.checkIconBox}>
-                              <Check size={16} color={colors.accentEmerald} strokeWidth={2.4} />
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                )}
+          {/* HIERARCHY SECTION 1: HERMES AGENT ENGINE */}
+          <View style={styles.categoryDividerBox}>
+            <View style={styles.categoryTitleRow}>
+              <Brain size={14} color="#F97316" />
+              <Text style={styles.categorySectionTitle}>HERMES AGENT ENGINE</Text>
+              <View style={styles.runtimeBadge}>
+                <Text style={styles.runtimeBadgeText}>HOST RUNTIME</Text>
               </View>
-            );
-          })}
+            </View>
+            <Text style={styles.categorySectionDesc}>
+              Model providers running inside Hermes with terminal, tools, memory & skills
+            </Text>
+          </View>
+
+          {hermesGroups.map(renderGroup)}
+
+          {/* HIERARCHY SECTION 2: STANDALONE CLI ENGINES */}
+          {standaloneGroups.length > 0 && (
+            <>
+              <View style={[styles.categoryDividerBox, { marginTop: 16 }]}>
+                <View style={styles.categoryTitleRow}>
+                  <Cpu size={14} color="#38BDF8" />
+                  <Text style={styles.categorySectionTitle}>STANDALONE CLI ENGINES</Text>
+                  <View style={[styles.runtimeBadge, styles.wsBadge]}>
+                    <Text style={[styles.runtimeBadgeText, styles.wsBadgeText]}>DIRECT VIA WS</Text>
+                  </View>
+                </View>
+                <Text style={styles.categorySectionDesc}>
+                  Standalone agent CLIs installed on your computer, accessible from phone
+                </Text>
+              </View>
+
+              {standaloneGroups.map(renderGroup)}
+            </>
+          )}
         </ScrollView>
       </View>
     </Modal>
@@ -390,8 +459,51 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  categoryDividerBox: {
+    marginBottom: 12,
+    marginTop: 6,
+    paddingHorizontal: 4,
+  },
+  categoryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 4,
+  },
+  categorySectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#E4E4E7',
+    letterSpacing: 0.9,
+  },
+  categorySectionDesc: {
+    fontSize: 11,
+    color: '#71717A',
+    lineHeight: 15,
+  },
+  runtimeBadge: {
+    backgroundColor: 'rgba(249, 115, 22, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+  },
+  runtimeBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#F97316',
+    letterSpacing: 0.5,
+  },
+  wsBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+  },
+  wsBadgeText: {
+    color: '#38BDF8',
+  },
   section: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   sectionHeaderRow: {
     flexDirection: 'row',

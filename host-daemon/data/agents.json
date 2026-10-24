@@ -6,8 +6,8 @@
     "systemPrompt": "You are Roger, an autonomous AI assistant powered by Hermes Agent and Codex. Help with code, terminal commands, and workflows.",
     "instructions": "You are Roger, an autonomous AI assistant powered by Hermes Agent and Codex. Help with code, terminal commands, and workflows.",
     "engine": "hermes",
-    "engineLabel": "Hermes Agent · Codex",
-    "model": "gpt-5.6-luna",
+    "engineLabel": "OPENCODE-FREE",
+    "model": "mimo-v2.6-flash-free",
     "workspacePath": "D:\\project\\O one",
     "status": "ready",
     "capabilities": [
