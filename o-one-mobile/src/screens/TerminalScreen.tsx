@@ -8,22 +8,21 @@ import {
   TouchableOpacity,
   Modal,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
-  Send,
   Trash2,
   Layers,
-  Wrench,
-  X,
-  Play,
-  CheckCircle2,
-  Terminal as TerminalIcon,
-  HelpCircle,
   Sparkles,
   Smartphone,
-  Cpu,
-  Monitor,
+  Play,
+  X,
+  CornerDownLeft,
+  ArrowUp,
+  ArrowDown,
+  SquareCode,
+  ShieldAlert,
 } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { rpcClient } from '../services/rpcClient';
@@ -41,6 +40,24 @@ interface QuickToolItem {
   shell: ShellType;
   badge: string;
 }
+
+const COMMON_COMPLETIONS = [
+  'detect-engines',
+  'pkg update -y',
+  'pkg install -y nodejs python git',
+  'npm install -g @anthropic-ai/claude-code',
+  'pip install hermes-agent',
+  'node -v',
+  'python3 -V',
+  'uname -a',
+  'clear',
+  'git status',
+  'git diff',
+  'ls -la',
+  'claude',
+  'hermes',
+  'ollama',
+];
 
 const QUICK_TOOLS: QuickToolItem[] = [
   {
@@ -122,27 +139,40 @@ export const TerminalScreen: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
 
+  // Termux Keyboard Controls State
+  const [ctrlActive, setCtrlActive] = useState(false);
+  const [altActive, setAltActive] = useState(false);
+  const [commandHistory, setCommandHistory] = useState<string[]>([
+    'detect-engines',
+    'node -v',
+    'python3 -V || python -V',
+    'uname -a',
+  ]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [draftInput, setDraftInput] = useState<string>('');
+
   const [logs, setLogs] = useState<TerminalLog[]>([
     {
       id: 'init-header',
       type: 'info',
       content:
         '┌────────────────────────────────────────────────────────┐\n' +
-        '│  O-One Interactive Developer Terminal                  │\n' +
-        '│  Shell: Linux Kernel & Host Environments               │\n' +
-        '│  Type any command below or tap [CLI Guide] for tools.  │\n' +
+        '│  O-One Termux Terminal Console                         │\n' +
+        '│  Full shell session with keyboard shortcuts & history  │\n' +
+        '│  Tap any command below or use Termux keys: TAB, ▲, ▼   │\n' +
         '└────────────────────────────────────────────────────────┘',
       timestamp: 'system',
     },
     {
       id: 'init-ready',
       type: 'info',
-      content: 'Terminal ready. Supported shells: Phone (Termux), Ubuntu (WSL2), PowerShell.',
+      content: 'Terminal ready. Type commands directly or use the Termux shortcuts bar.',
       timestamp: 'system',
     },
   ]);
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
 
   // Auto-scroll on new logs
   useEffect(() => {
@@ -157,17 +187,31 @@ export const TerminalScreen: React.FC = () => {
       setShellType(initialSh);
       setCommandInput(initialCmd);
       clearTerminalInitialCommand();
-      // Auto-run if requested
       setTimeout(() => {
         handleRunCommand(initialCmd, initialSh);
       }, 200);
     }
   }, [terminalInitialCommand, terminalInitialShell]);
 
+  // -------------------------------------------------------------
+  // COMMAND EXECUTION
+  // -------------------------------------------------------------
   const handleRunCommand = (cmdToRun?: string, explicitShell?: ShellType) => {
     const rawCmd = cmdToRun !== undefined ? cmdToRun : commandInput;
     const cmd = rawCmd.trim();
     if (!cmd || isRunning) return;
+
+    // Reset history browsing state & record command in history
+    setCommandHistory((prev) => (prev[prev.length - 1] === cmd ? prev : [...prev, cmd]));
+    setHistoryIndex(-1);
+    setDraftInput('');
+
+    // Handle 'clear' command directly
+    if (cmd === 'clear') {
+      handleClear();
+      setCommandInput('');
+      return;
+    }
 
     const currentShell = explicitShell || shellType;
 
@@ -247,6 +291,86 @@ export const TerminalScreen: React.FC = () => {
         setIsRunning(false);
       }
     });
+  };
+
+  // -------------------------------------------------------------
+  // SIGINT / CTRL+C KILL PROCESS
+  // -------------------------------------------------------------
+  const handleCtrlC = () => {
+    if (isRunning) {
+      rpcClient.send('terminal.kill', {}, () => {});
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `abort-${Date.now()}`,
+          type: 'stderr',
+          content: '^C',
+          timestamp: '',
+        },
+      ]);
+      setIsRunning(false);
+    } else if (commandInput) {
+      setLogs((prev) => [
+        ...prev,
+        {
+          id: `int-${Date.now()}`,
+          type: 'input',
+          content: `${shellType === 'phone' ? 'phone:~$ ' : shellType === 'wsl' ? 'ubuntu:~$ ' : 'PS> '}${commandInput}^C`,
+          timestamp: '',
+        },
+      ]);
+      setCommandInput('');
+    }
+    setCtrlActive(false);
+    setHistoryIndex(-1);
+  };
+
+  // -------------------------------------------------------------
+  // TERMUX SHORTCUT KEYS HANDLERS
+  // -------------------------------------------------------------
+  const handleHistoryUp = () => {
+    if (commandHistory.length === 0) return;
+    if (historyIndex === -1) {
+      setDraftInput(commandInput);
+      const nextIdx = commandHistory.length - 1;
+      setHistoryIndex(nextIdx);
+      setCommandInput(commandHistory[nextIdx]);
+    } else if (historyIndex > 0) {
+      const nextIdx = historyIndex - 1;
+      setHistoryIndex(nextIdx);
+      setCommandInput(commandHistory[nextIdx]);
+    }
+  };
+
+  const handleHistoryDown = () => {
+    if (historyIndex === -1) return;
+    if (historyIndex < commandHistory.length - 1) {
+      const nextIdx = historyIndex + 1;
+      setHistoryIndex(nextIdx);
+      setCommandInput(commandHistory[nextIdx]);
+    } else {
+      setHistoryIndex(-1);
+      setCommandInput(draftInput);
+    }
+  };
+
+  const handleTab = () => {
+    const trimmed = commandInput.trim();
+    if (!trimmed) {
+      setCommandInput((prev) => prev + '  ');
+      return;
+    }
+    const match = COMMON_COMPLETIONS.find((c) => c.startsWith(trimmed));
+    if (match) {
+      setCommandInput(match + ' ');
+    } else {
+      setCommandInput((prev) => prev + ' ');
+    }
+  };
+
+  const handleInsertChar = (ch: string) => {
+    setCommandInput((prev) => prev + ch);
+    inputRef.current?.focus();
   };
 
   const handleClear = () => {
@@ -329,7 +453,7 @@ export const TerminalScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Shell Segmented Selector (Strictly Locked Height - Never Stretches) */}
+      {/* Shell Segmented Selector */}
       <View style={styles.shellBar}>
         <View style={styles.shellSelector}>
           <TouchableOpacity
@@ -369,51 +493,87 @@ export const TerminalScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Full-Height Terminal Console Window (flex: 1) */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.terminalBody}
-        contentContainerStyle={styles.terminalContent}
-        showsVerticalScrollIndicator={true}
+      {/* Direct Termux AMOLED Black Screen (Tap anywhere to focus prompt) */}
+      <TouchableOpacity
+        activeOpacity={1}
+        style={styles.terminalBodyTouch}
+        onPress={() => inputRef.current?.focus()}
       >
-        {logs.map((log) => {
-          if (log.type === 'input') {
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.terminalBody}
+          contentContainerStyle={styles.terminalContent}
+          showsVerticalScrollIndicator={true}
+        >
+          {logs.map((log) => {
+            if (log.type === 'input') {
+              return (
+                <View key={log.id} style={styles.inputLineBox}>
+                  <Text style={styles.inputPromptText}>{log.content}</Text>
+                </View>
+              );
+            }
+            if (log.type === 'info') {
+              return (
+                <Text key={log.id} style={styles.infoLineText}>
+                  {log.content}
+                </Text>
+              );
+            }
+            if (log.type === 'stderr') {
+              return (
+                <Text key={log.id} style={styles.errLineText}>
+                  {log.content}
+                </Text>
+              );
+            }
             return (
-              <View key={log.id} style={styles.inputLineBox}>
-                <Text style={styles.inputPromptText}>{log.content}</Text>
-              </View>
-            );
-          }
-          if (log.type === 'info') {
-            return (
-              <Text key={log.id} style={styles.infoLineText}>
+              <Text key={log.id} style={styles.stdoutLineText}>
                 {log.content}
               </Text>
             );
-          }
-          if (log.type === 'stderr') {
-            return (
-              <Text key={log.id} style={styles.errLineText}>
-                {log.content}
-              </Text>
-            );
-          }
-          return (
-            <Text key={log.id} style={styles.stdoutLineText}>
-              {log.content}
+          })}
+
+          {isRunning && (
+            <View style={styles.runningIndicator}>
+              <ActivityIndicator size="small" color="#10B981" />
+              <Text style={styles.runningText}>Executing in background...</Text>
+              <TouchableOpacity style={styles.killPillBtn} onPress={handleCtrlC} activeOpacity={0.7}>
+                <Text style={styles.killPillText}>^C Stop</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Integrated Prompt Line right at bottom of console */}
+          <View style={styles.inlinePromptLine}>
+            <Text style={styles.inlinePromptText}>
+              {shellType === 'phone' ? 'phone:~$ ' : shellType === 'wsl' ? 'ubuntu:~$ ' : 'PS> '}
             </Text>
-          );
-        })}
-
-        {isRunning && (
-          <View style={styles.runningIndicator}>
-            <ActivityIndicator size="small" color={colors.accentEmerald} />
-            <Text style={styles.runningText}>Running command in background...</Text>
+            <TextInput
+              ref={inputRef}
+              style={styles.inlineTextInput}
+              value={commandInput}
+              onChangeText={(text) => {
+                // If CTRL was toggled on and user types 'c' or 'C', trigger SIGINT
+                if (ctrlActive && (text.endsWith('c') || text.endsWith('C'))) {
+                  handleCtrlC();
+                  return;
+                }
+                setCommandInput(text);
+              }}
+              onSubmitEditing={() => handleRunCommand()}
+              placeholder={isRunning ? 'Command running... (^C to stop)' : 'type command...'}
+              placeholderTextColor="#4B5563"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="go"
+              blurOnSubmit={false}
+            />
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      </TouchableOpacity>
 
-      {/* Micro Quick-Action Chips Strip (Strict height: 32px, flexGrow: 0) */}
+      {/* Micro Quick-Action Chips Strip */}
       <View style={styles.quickChipsStrip}>
         <ScrollView
           horizontal
@@ -425,7 +585,7 @@ export const TerminalScreen: React.FC = () => {
             onPress={() => handleRunCommand('detect-engines')}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickChipText}>🔍 detect-engines</Text>
+            <Text style={styles.quickChipText}>detect-engines</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -436,7 +596,7 @@ export const TerminalScreen: React.FC = () => {
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickChipText}>📱 pkg update</Text>
+            <Text style={styles.quickChipText}>pkg update</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -444,7 +604,7 @@ export const TerminalScreen: React.FC = () => {
             onPress={() => handleRunCommand('node -v')}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickChipText}>⚡ node -v</Text>
+            <Text style={styles.quickChipText}>node -v</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -452,7 +612,7 @@ export const TerminalScreen: React.FC = () => {
             onPress={() => handleRunCommand('python3 -V || python -V')}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickChipText}>🐍 python -V</Text>
+            <Text style={styles.quickChipText}>python -V</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -463,7 +623,15 @@ export const TerminalScreen: React.FC = () => {
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.quickChipText}>🐧 uname -a</Text>
+            <Text style={styles.quickChipText}>uname -a</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickChip}
+            onPress={() => handleRunCommand('clear')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.quickChipText}>clear</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -477,39 +645,107 @@ export const TerminalScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      {/* Command Input Prompt Row */}
-      <View style={styles.commandInputRow}>
-        <View style={styles.promptBadge}>
-          <Text style={styles.promptBadgeText}>
-            {shellType === 'phone' ? 'phone:~$ ' : shellType === 'wsl' ? 'ubuntu:~$ ' : 'PS> '}
-          </Text>
-        </View>
-
-        <TextInput
-          style={styles.commandTextInput}
-          placeholder={
-            shellType === 'phone'
-              ? 'Run phone Linux command (pkg, npm, python)...'
-              : shellType === 'wsl'
-              ? 'Run Linux command (apt, curl, git)...'
-              : 'Run host command (npm, git, hermes)...'
-          }
-          placeholderTextColor={colors.textMuted}
-          value={commandInput}
-          onChangeText={setCommandInput}
-          onSubmitEditing={() => handleRunCommand()}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="send"
-        />
-
+      {/* ============================================================== */}
+      {/* THE ICONIC TERMUX ACCESSORY KEYS TOOLBAR (Above Mobile Keyboard) */}
+      {/* ============================================================== */}
+      <View style={styles.termuxBar}>
+        {/* ESC Key */}
         <TouchableOpacity
-          style={[styles.sendBtn, !commandInput.trim() && styles.sendBtnDisabled]}
-          onPress={() => handleRunCommand()}
-          disabled={!commandInput.trim() || isRunning}
-          activeOpacity={0.8}
+          style={styles.termuxKey}
+          onPress={() => {
+            setCommandInput('');
+            setHistoryIndex(-1);
+            setCtrlActive(false);
+          }}
+          activeOpacity={0.6}
         >
-          <Send size={15} color={commandInput.trim() ? '#000000' : colors.textMuted} />
+          <Text style={styles.termuxKeyText}>ESC</Text>
+        </TouchableOpacity>
+
+        {/* TAB Key (Autocomplete) */}
+        <TouchableOpacity style={styles.termuxKey} onPress={handleTab} activeOpacity={0.6}>
+          <Text style={styles.termuxKeyText}>TAB</Text>
+        </TouchableOpacity>
+
+        {/* CTRL Key (Toggle or Kill) */}
+        <TouchableOpacity
+          style={[styles.termuxKey, ctrlActive && styles.termuxKeyActive]}
+          onPress={() => {
+            if (isRunning) {
+              handleCtrlC();
+            } else {
+              setCtrlActive(!ctrlActive);
+            }
+          }}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.termuxKeyText, ctrlActive && styles.termuxKeyTextActive]}>
+            {isRunning ? '^C' : 'CTRL'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* ALT Key */}
+        <TouchableOpacity
+          style={[styles.termuxKey, altActive && styles.termuxKeyActive]}
+          onPress={() => setAltActive(!altActive)}
+          activeOpacity={0.6}
+        >
+          <Text style={[styles.termuxKeyText, altActive && styles.termuxKeyTextActive]}>ALT</Text>
+        </TouchableOpacity>
+
+        {/* Dash (-) */}
+        <TouchableOpacity
+          style={styles.termuxKey}
+          onPress={() => handleInsertChar('-')}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.termuxKeyText}>-</Text>
+        </TouchableOpacity>
+
+        {/* Slash (/) */}
+        <TouchableOpacity
+          style={styles.termuxKey}
+          onPress={() => handleInsertChar('/')}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.termuxKeyText}>/</Text>
+        </TouchableOpacity>
+
+        {/* Pipe (|) */}
+        <TouchableOpacity
+          style={styles.termuxKey}
+          onPress={() => handleInsertChar(' | ')}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.termuxKeyText}>|</Text>
+        </TouchableOpacity>
+
+        {/* Tilde (~) */}
+        <TouchableOpacity
+          style={styles.termuxKey}
+          onPress={() => handleInsertChar('~')}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.termuxKeyText}>~</Text>
+        </TouchableOpacity>
+
+        {/* History UP (▲) */}
+        <TouchableOpacity style={styles.termuxKey} onPress={handleHistoryUp} activeOpacity={0.6}>
+          <ArrowUp size={13} color="#D1D1D6" strokeWidth={2.4} />
+        </TouchableOpacity>
+
+        {/* History DOWN (▼) */}
+        <TouchableOpacity style={styles.termuxKey} onPress={handleHistoryDown} activeOpacity={0.6}>
+          <ArrowDown size={13} color="#D1D1D6" strokeWidth={2.4} />
+        </TouchableOpacity>
+
+        {/* Enter Key (↵) */}
+        <TouchableOpacity
+          style={[styles.termuxKey, styles.termuxKeyEnter]}
+          onPress={() => handleRunCommand()}
+          activeOpacity={0.7}
+        >
+          <CornerDownLeft size={13} color="#FFFFFF" strokeWidth={2.4} />
         </TouchableOpacity>
       </View>
 
@@ -642,7 +878,7 @@ export const TerminalScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#09090C',
+    backgroundColor: '#000000',
   },
   topHeader: {
     height: 52,
@@ -652,13 +888,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: '#0D0D10',
+    backgroundColor: '#0C0C0E',
   },
   headerBtn: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#18181D',
+    backgroundColor: '#1E1E24',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -682,30 +918,30 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   shellBar: {
-    height: 42,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 14,
-    backgroundColor: '#111115',
+    backgroundColor: '#0C0C0E',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.06)',
     flexGrow: 0,
   },
   shellSelector: {
     flexDirection: 'row',
-    backgroundColor: '#1A1A22',
+    backgroundColor: '#181820',
     borderRadius: 8,
     padding: 2,
     gap: 4,
   },
   shellTab: {
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 6,
   },
   shellTabActive: {
-    backgroundColor: '#2D2D3A',
+    backgroundColor: '#272733',
   },
   shellTabText: {
     fontSize: 11,
@@ -716,24 +952,28 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
   },
+  terminalBodyTouch: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
   terminalBody: {
     flex: 1,
-    backgroundColor: '#09090C',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: '#000000',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   terminalContent: {
     gap: 2,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   inputLineBox: {
-    marginTop: 8,
+    marginTop: 6,
     marginBottom: 2,
   },
   inputPromptText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontFamily: 'monospace',
-    color: colors.accentEmerald,
+    color: '#22C55E',
     fontWeight: '700',
     lineHeight: 18,
   },
@@ -744,16 +984,16 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   stdoutLineText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontFamily: 'monospace',
-    color: '#E2E8F0',
-    lineHeight: 17,
+    color: '#F1F5F9',
+    lineHeight: 18,
   },
   errLineText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontFamily: 'monospace',
-    color: '#F87171',
-    lineHeight: 17,
+    color: '#EF4444',
+    lineHeight: 18,
   },
   runningIndicator: {
     flexDirection: 'row',
@@ -763,39 +1003,69 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   runningText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontFamily: 'monospace',
     color: colors.textMuted,
   },
+  killPillBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#272730',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  killPillText: {
+    fontSize: 10.5,
+    fontFamily: 'monospace',
+    color: '#EF4444',
+    fontWeight: '700',
+  },
+  inlinePromptLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    minHeight: 24,
+  },
+  inlinePromptText: {
+    fontSize: 12.5,
+    fontFamily: 'monospace',
+    color: '#22C55E',
+    fontWeight: '700',
+  },
+  inlineTextInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontFamily: 'monospace',
+    padding: 0,
+    margin: 0,
+  },
   quickChipsStrip: {
-    height: 34,
-    maxHeight: 34,
+    height: 32,
+    maxHeight: 32,
     flexGrow: 0,
-    backgroundColor: '#111115',
+    backgroundColor: '#0C0C0E',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.05)',
   },
   quickChipsContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     gap: 6,
-    height: 34,
+    height: 32,
   },
   quickChip: {
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    backgroundColor: '#1C1C24',
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: 5,
+    backgroundColor: '#181820',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-  },
-  quickChipHighlight: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderColor: 'rgba(245, 158, 11, 0.3)',
   },
   quickChipText: {
     fontSize: 10.5,
@@ -803,48 +1073,43 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '500',
   },
-  commandInputRow: {
+  termuxBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#131318',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    backgroundColor: '#0C0C0E',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.08)',
+    gap: 4,
   },
-  promptBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 4,
-    backgroundColor: '#1E1E28',
+  termuxKey: {
+    flex: 1,
+    height: 32,
+    backgroundColor: '#1E1E26',
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  promptBadgeText: {
+  termuxKeyActive: {
+    backgroundColor: '#323242',
+    borderColor: '#FFFFFF',
+  },
+  termuxKeyEnter: {
+    backgroundColor: '#272738',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  termuxKeyText: {
     fontSize: 11,
     fontFamily: 'monospace',
     color: '#D1D1D6',
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  commandTextInput: {
-    flex: 1,
-    height: 36,
-    backgroundColor: '#1A1A22',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+  termuxKeyTextActive: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontFamily: 'monospace',
-  },
-  sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnDisabled: {
-    backgroundColor: '#262630',
   },
   modalOverlay: {
     flex: 1,

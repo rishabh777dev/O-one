@@ -135,6 +135,7 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 let cachedLinuxKernel = 'Linux Kernel Ready';
+let activeTerminalProcess: any = null;
 try {
   exec('wsl uname -r', (wslErr, wslStdout) => {
     if (!wslErr && wslStdout) {
@@ -398,6 +399,18 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       const shellType = params.shellType || 'wsl'; // 'wsl' | 'powershell' | 'cmd' | 'phone' | 'bash'
       const cwd = params.cwd || process.cwd();
 
+      // Terminate any previous hanging process if still running
+      if (activeTerminalProcess) {
+        try {
+          if (isWin && activeTerminalProcess.pid) {
+            exec(`taskkill /pid ${activeTerminalProcess.pid} /T /F`);
+          } else {
+            activeTerminalProcess.kill('SIGINT');
+          }
+        } catch {}
+        activeTerminalProcess = null;
+      }
+
       console.log(`[O1 Terminal] Executing [${shellType}]: ${command}`);
 
       let child;
@@ -414,6 +427,8 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
         child = spawn('cmd', ['/c', command], { cwd, shell: true });
       }
 
+      activeTerminalProcess = child;
+
       child.stdout.on('data', (data) => {
         ws.send(JSON.stringify({ id, type: 'stdout', data: data.toString() }));
       });
@@ -423,13 +438,33 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       });
 
       child.on('error', (err) => {
+        if (activeTerminalProcess === child) activeTerminalProcess = null;
         ws.send(JSON.stringify({ id, type: 'stderr', data: `Execution error: ${err.message}\n` }));
         ws.send(JSON.stringify({ id, type: 'done', exitCode: 1 }));
       });
 
       child.on('close', (code) => {
+        if (activeTerminalProcess === child) activeTerminalProcess = null;
         ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
       });
+      break;
+    }
+
+    case 'terminal.kill': {
+      if (activeTerminalProcess) {
+        console.log(`[O1 Terminal] Sending SIGINT / killing active process pid ${activeTerminalProcess.pid}`);
+        try {
+          if (isWin && activeTerminalProcess.pid) {
+            exec(`taskkill /pid ${activeTerminalProcess.pid} /T /F`);
+          } else {
+            activeTerminalProcess.kill('SIGINT');
+          }
+        } catch (e: any) {
+          console.error(`[O1 Terminal] Kill error:`, e.message);
+        }
+        activeTerminalProcess = null;
+      }
+      ws.send(JSON.stringify({ id, type: 'done', exitCode: 130 }));
       break;
     }
 
