@@ -23,6 +23,8 @@ import {
   Plus,
   History,
   MessageSquare,
+  FolderTree,
+  BookOpen,
 } from 'lucide-react-native';
 import { colors } from '../theme/colors';
 import { useAppStore } from '../store/useAppStore';
@@ -32,6 +34,7 @@ import { ThoughtTrace } from '../components/common/ThoughtTrace';
 import { CreatureAvatar } from '../components/common/CreatureAvatar';
 import { AgentInfoModal } from '../components/common/AgentInfoModal';
 import { HermesSessionsModal } from '../components/common/HermesSessionsModal';
+import { CockpitToolOverlays } from '../components/cockpit/CockpitToolOverlays';
 import { ChatMessage } from '../types';
 
 interface ThinkingBubbleProps {
@@ -135,6 +138,11 @@ export const CockpitScreen: React.FC = () => {
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [showSessionsModal, setShowSessionsModal] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<'none' | 'files' | 'terminal' | 'knowledge'>('none');
+
+  const toggleTool = (tool: 'files' | 'terminal' | 'knowledge') => {
+    setActiveTool((prev) => (prev === tool ? 'none' : tool));
+  };
 
   const agentMessages = activeAgent ? messages[activeAgent.id] || [] : [];
   const activeSessionId = activeAgent ? sessions[activeAgent.id] : undefined;
@@ -211,8 +219,64 @@ export const CockpitScreen: React.FC = () => {
           </View>
         </TouchableOpacity>
 
-        {/* Right Action Buttons: "+ New Chat" and "Sessions History" */}
+        {/* Right Action Buttons: Small Collapsible Tool Icons + New Chat + History */}
         <View style={styles.headerRightActions}>
+          {/* File Structure Icon (Show on click, hide on unclick) */}
+          <TouchableOpacity
+            style={[
+              styles.microToolBtn,
+              activeTool === 'files' && styles.microToolBtnActiveFiles,
+            ]}
+            onPress={() => toggleTool('files')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityLabel="Project files"
+          >
+            <FolderTree
+              size={15}
+              color={activeTool === 'files' ? '#38BDF8' : '#A1A1AA'}
+              strokeWidth={2.2}
+            />
+          </TouchableOpacity>
+
+          {/* In-Cockpit Terminal Icon (Show on click, hide on unclick) */}
+          <TouchableOpacity
+            style={[
+              styles.microToolBtn,
+              activeTool === 'terminal' && styles.microToolBtnActiveTerminal,
+            ]}
+            onPress={() => toggleTool('terminal')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityLabel="In-Cockpit Terminal"
+          >
+            <Terminal
+              size={15}
+              color={activeTool === 'terminal' ? '#10B981' : '#A1A1AA'}
+              strokeWidth={2.2}
+            />
+          </TouchableOpacity>
+
+          {/* Shared Knowledge Icon (Show on click, hide on unclick) */}
+          <TouchableOpacity
+            style={[
+              styles.microToolBtn,
+              activeTool === 'knowledge' && styles.microToolBtnActiveKnowledge,
+            ]}
+            onPress={() => toggleTool('knowledge')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityLabel="Shared Knowledge"
+          >
+            <BookOpen
+              size={15}
+              color={activeTool === 'knowledge' ? '#A78BFA' : '#A1A1AA'}
+              strokeWidth={2.2}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.headerActionsDivider} />
+
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => {
@@ -247,6 +311,14 @@ export const CockpitScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Collapsible Micro-Tool Overlay (Hidden by default to keep chat clear and spacious) */}
+      <CockpitToolOverlays
+        activeTool={activeTool}
+        onClose={() => setActiveTool('none')}
+        agent={activeAgent}
+        onInsertPrompt={(prompt) => sendMessage(activeAgent, prompt)}
+      />
 
       {/* Messages Scroll View */}
       <ScrollView
@@ -513,7 +585,35 @@ const styles = StyleSheet.create({
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+  },
+  microToolBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  microToolBtnActiveFiles: {
+    backgroundColor: 'rgba(56, 189, 248, 0.2)',
+    borderColor: '#38BDF8',
+  },
+  microToolBtnActiveTerminal: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    borderColor: '#10B981',
+  },
+  microToolBtnActiveKnowledge: {
+    backgroundColor: 'rgba(167, 139, 250, 0.2)',
+    borderColor: '#A78BFA',
+  },
+  headerActionsDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 2,
   },
   iconBtn: {
     width: 38,

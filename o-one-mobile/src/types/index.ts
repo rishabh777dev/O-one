@@ -49,6 +49,7 @@ export interface Agent {
   capabilities: string[];
   mcpServers: string[];
   createdAt: string;
+  serverId?: string; // Workspace isolation: associates agent to a specific server/workspace
   // OpenBot creature avatar & custom attributes
   avatarShape?: number; // 0-11
   avatarColor?: string; // hex
@@ -56,6 +57,35 @@ export interface Agent {
   instructions?: string;
   notifications?: boolean;
   isCloudAgent?: boolean;
+}
+
+export interface ProjectItem {
+  id: string; // e.g. "prj-o-one", "prj-cadence"
+  name: string;
+  path: string;
+  hasGit?: boolean;
+  branch?: string;
+  agentId?: string;
+  serverId?: string;
+  lastActive?: string;
+}
+
+export interface KnowledgeFile {
+  id: string;
+  name: string;
+  size?: number;
+  content: string;
+  updatedAt: string;
+  description?: string;
+}
+
+export interface FileTreeNode {
+  name: string;
+  path: string;
+  fullPath: string;
+  isDir: boolean;
+  size?: number;
+  children?: FileTreeNode[];
 }
 
 export interface ChatMessage {

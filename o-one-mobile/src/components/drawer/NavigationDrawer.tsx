@@ -23,10 +23,13 @@ import {
   Cloud,
   Settings,
   Check,
+  BookOpen,
 } from 'lucide-react-native';
 import { useAppStore } from '../../store/useAppStore';
+import { useKnowledgeStore } from '../../store/useKnowledgeStore';
 import { AddServerModal } from '../server/AddServerModal';
 import { SettingsModal } from '../settings/SettingsModal';
+import { KnowledgeModal } from '../knowledge/KnowledgeModal';
 import { ServerItem } from '../../types';
 
 export const NavigationDrawer: React.FC = () => {
@@ -42,10 +45,12 @@ export const NavigationDrawer: React.FC = () => {
     selectServer,
     deleteServer,
   } = useAppStore();
+  const { files: knowledgeFiles } = useKnowledgeStore();
 
   const [isMounted, setIsMounted] = useState(isDrawerOpen);
   const [showAddServerModal, setShowAddServerModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showKnowledgeModal, setShowKnowledgeModal] = useState(false);
 
   // Animation values: slide strictly from the LEFT edge
   const slideAnim = useRef(new Animated.Value(-sheetWidth)).current;
@@ -253,6 +258,26 @@ export const NavigationDrawer: React.FC = () => {
             <Plus size={16} color="#71717A" />
             <Text style={styles.addServerRowText}>Add a new server (SSH / Phone / Cloud)</Text>
           </TouchableOpacity>
+
+          {/* Shared Knowledge Section (Shared across all 3 workspaces) */}
+          <View style={styles.drawerSectionDivider} />
+          <Text style={styles.drawerSectionHeader}>SHARED STORAGE</Text>
+          <TouchableOpacity
+            style={styles.knowledgeRow}
+            onPress={() => setShowKnowledgeModal(true)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.knowledgeIconBox}>
+              <BookOpen size={20} color="#38BDF8" strokeWidth={2.2} />
+            </View>
+            <View style={styles.knowledgeInfoCol}>
+              <Text style={styles.knowledgeTitle}>Shared Knowledge</Text>
+              <Text style={styles.knowledgeSub}>Files shared across all servers</Text>
+            </View>
+            <View style={styles.knowledgeBadge}>
+              <Text style={styles.knowledgeBadgeText}>{knowledgeFiles.length}</Text>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
 
         {/* Bottom Profile Row - FIRMLY PINNED AT BOTTOM (Matching dense_042) */}
@@ -300,6 +325,12 @@ export const NavigationDrawer: React.FC = () => {
       <SettingsModal
         visible={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
+      />
+
+      {/* Shared Knowledge Modal */}
+      <KnowledgeModal
+        visible={showKnowledgeModal}
+        onClose={() => setShowKnowledgeModal(false)}
       />
     </View>
   );
@@ -451,6 +482,61 @@ const styles = StyleSheet.create({
   addServerRowText: {
     fontSize: 12.5,
     color: '#71717A',
+  },
+  drawerSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    marginVertical: 14,
+  },
+  drawerSectionHeader: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#71717A',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  knowledgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.18)',
+  },
+  knowledgeIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  knowledgeInfoCol: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  knowledgeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  knowledgeSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  knowledgeBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  knowledgeBadgeText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
   },
   bottomProfileBar: {
     flexDirection: 'row',

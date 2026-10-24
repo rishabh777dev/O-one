@@ -1,0 +1,6 @@
+{
+  "version": "2.0.0",
+  "sharedKnowledge": true,
+  "supportedEngines": ["Hermes 3", "Antigravity ACP", "OpenRouter"],
+  "knowledgeSync": "active"
+}

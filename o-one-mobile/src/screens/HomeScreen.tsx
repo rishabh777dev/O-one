@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
+  Alert,
 } from 'react-native';
 import {
   Layers,
@@ -16,9 +17,13 @@ import {
   ChevronDown,
   ChevronRight,
   Plus,
-  Sparkles,
-  Check,
+  Terminal,
+  FolderGit2,
+  Folder,
+  Hash,
   X,
+  ArrowRight,
+  Bot,
 } from 'lucide-react-native';
 import { colors } from '../../src/theme/colors';
 import { useAppStore } from '../store/useAppStore';
@@ -26,40 +31,92 @@ import { useAgentStore } from '../store/useAgentStore';
 import { CreatureAvatar } from '../components/common/CreatureAvatar';
 import { CreateAgentModal } from '../components/common/CreateAgentModal';
 import { BrandLogo } from '../components/common/BrandLogo';
-import { Agent } from '../types';
+import { Agent, ProjectItem } from '../types';
 
 export const HomeScreen: React.FC = () => {
-  const { agents, setActiveAgent, openDrawer } = useAppStore();
+  const {
+    setActiveAgent,
+    openDrawer,
+    getAgentsForActiveServer,
+    getProjectsForActiveServer,
+    openProject,
+    openAgentById,
+    activeServerId,
+    servers,
+  } = useAppStore();
   const { messages } = useAgentStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [sectionMenuAnchor, setSectionMenuAnchor] = useState<'cloud' | 'custom' | null>(null);
+  const [showOpenByIdModal, setShowOpenByIdModal] = useState(false);
+  const [lookupIdInput, setLookupIdInput] = useState('');
+  const [sectionMenuAnchor, setSectionMenuAnchor] = useState<'projects' | 'agents' | null>(null);
 
-  // Accordion toggle states (OpenBot has both open by default)
-  const [cloudAgentOpen, setCloudAgentOpen] = useState(true);
+  // Accordion toggle states
+  const [projectsOpen, setProjectsOpen] = useState(true);
   const [agentsListOpen, setAgentsListOpen] = useState(true);
 
+  // Active workspace metadata
+  const currentServer = servers.find((s) => s.id === activeServerId) || servers[0];
+  const workspaceProjects = getProjectsForActiveServer();
+  const workspaceAgents = getAgentsForActiveServer();
+
   // Filter agents by search query
-  const filteredAgents = agents.filter(
+  const filteredAgents = workspaceAgents.filter(
     (a) =>
-      !a.isCloudAgent &&
-      (a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.role.toLowerCase().includes(searchQuery.toLowerCase()))
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.role.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const cloudAgent = agents.find((a) => a.isCloudAgent);
+  // Filter projects by search query
+  const filteredProjects = workspaceProjects.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.id.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleSelectAgent = (agent: Agent) => {
     setActiveAgent(agent);
+  };
+
+  const handleOpenById = () => {
+    const query = lookupIdInput.trim();
+    if (!query) {
+      Alert.alert('Empty Input', 'Please enter a Project ID (e.g. prj-o-one) or Agent ID (e.g. agent-1).');
+      return;
+    }
+
+    // Try matching agent ID first
+    const agentOpened = openAgentById(query);
+    if (agentOpened) {
+      setShowOpenByIdModal(false);
+      setLookupIdInput('');
+      return;
+    }
+
+    // Try matching project ID
+    const foundProject = workspaceProjects.find(
+      (p) => p.id.toLowerCase() === query.toLowerCase() || p.name.toLowerCase() === query.toLowerCase()
+    );
+    if (foundProject) {
+      openProject(foundProject.id, false);
+      setShowOpenByIdModal(false);
+      setLookupIdInput('');
+      return;
+    }
+
+    Alert.alert(
+      'Not Found',
+      `No project or agent found matching ID "${query}". You can create a new agent or add a project.`
+    );
   };
 
   return (
     <View style={styles.container}>
       {/* Top Header (Matching dense_041) */}
       <View style={styles.header}>
-        {/* Left Stacked Layers Icon (Opens Servers Drawer) */}
+        {/* Left Stacked Layers Icon (Opens Workspace / Servers Drawer) */}
         <TouchableOpacity
           style={styles.iconBtn}
           onPress={openDrawer}
@@ -101,7 +158,7 @@ export const HomeScreen: React.FC = () => {
             <Search size={15} color="#71717A" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search agents or conversations..."
+              placeholder="Search projects, IDs, or agents..."
               placeholderTextColor="#71717A"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -116,53 +173,57 @@ export const HomeScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Main Agent List Scroll View */}
+      {/* Main Scroll View */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Blank Slate Welcome Hero if no agents exist yet */}
-        {agents.length === 0 ? (
-          <View style={styles.heroBlankCard}>
-            <View style={styles.heroAvatarWrap}>
-              <CreatureAvatar shapeIndex={0} color="#2563EB" size={80} showGlow={true} />
-            </View>
-            <Text style={styles.heroBlankTitle}>Welcome to O one</Text>
-            <Text style={styles.heroBlankSub}>
-              You have a blank slate. Create your first autonomous agent and configure its creature
-              avatar, LLM engine (Hermes 3, Codex, Claude, DeepSeek, Antigravity), and instructions.
-            </Text>
-            <TouchableOpacity
-              style={styles.heroCreateBtn}
-              onPress={() => setShowCreateModal(true)}
-              activeOpacity={0.8}
-            >
-              <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
-              <Text style={styles.heroCreateBtnText}>Create Agent</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Accordion 1: Cloud Agent (Matching dense_041) */}
-            <View style={styles.accordionGroup}>
+        {/* Active Workspace Banner */}
+        <View style={styles.workspaceBanner}>
+          <View
+            style={[
+              styles.workspaceDot,
+              { backgroundColor: currentServer?.color || colors.accentEmerald },
+            ]}
+          />
+          <Text style={styles.workspaceBannerText}>
+            Workspace: <Text style={styles.workspaceBannerBold}>{currentServer?.name || 'Local'}</Text>
+          </Text>
+          <TouchableOpacity
+            style={styles.openByIdBadgeBtn}
+            onPress={() => setShowOpenByIdModal(true)}
+            activeOpacity={0.7}
+          >
+            <Hash size={12} color="#38BDF8" strokeWidth={2.4} />
+            <Text style={styles.openByIdBadgeText}>Open by ID</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ============================================================== */}
+        {/* Accordion 1: Projects (Clean listing with Terminal icon)        */}
+        {/* ============================================================== */}
+        <View style={styles.accordionGroup}>
           <View style={styles.accordionHeaderRow}>
             <TouchableOpacity
               style={styles.accordionTitleTouch}
-              onPress={() => setCloudAgentOpen(!cloudAgentOpen)}
+              onPress={() => setProjectsOpen(!projectsOpen)}
               activeOpacity={0.7}
             >
-              {cloudAgentOpen ? (
+              {projectsOpen ? (
                 <ChevronDown size={14} color="#71717A" />
               ) : (
                 <ChevronRight size={14} color="#71717A" />
               )}
-              <Text style={styles.accordionTitle}>Cloud Agent</Text>
+              <Text style={styles.accordionTitle}>Projects</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{filteredProjects.length}</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.moreBtn}
-              onPress={() => setSectionMenuAnchor('cloud')}
+              onPress={() => setSectionMenuAnchor('projects')}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -170,54 +231,78 @@ export const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {cloudAgentOpen && (
-            cloudAgent ? (() => {
-              const rogerMsgs = messages[cloudAgent.id] || [];
-              const rogerLastMsg = rogerMsgs.length > 0
-                ? rogerMsgs[rogerMsgs.length - 1].content.replace(/\n+/g, ' ')
-                : 'Hi!';
-              const rogerDate = rogerMsgs.length > 0
-                ? (rogerMsgs[rogerMsgs.length - 1].timestamp || '20 Oct')
-                : '20 Oct';
-
-              return (
+          {projectsOpen && (
+            <View style={styles.projectListWrap}>
+              {filteredProjects.length === 0 ? (
                 <TouchableOpacity
-                  style={styles.agentRow}
-                  onPress={() => handleSelectAgent(cloudAgent)}
-                  activeOpacity={0.7}
+                  style={styles.blankSlateCard}
+                  onPress={() => setShowOpenByIdModal(true)}
+                  activeOpacity={0.8}
                 >
-                  <CreatureAvatar
-                    shapeIndex={cloudAgent.avatarShape ?? 6}
-                    color={cloudAgent.avatarColor ?? '#EA580C'}
-                    size={44}
-                    showGlow={false}
-                  />
-                  <View style={styles.agentInfoCol}>
-                    <Text style={styles.agentName}>{cloudAgent.name}</Text>
-                    <Text style={styles.agentLastMsg} numberOfLines={1}>
-                      {rogerLastMsg}
-                    </Text>
+                  <View style={styles.blankIconCircle}>
+                    <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
                   </View>
-                  <Text style={styles.dateText}>{rogerDate}</Text>
+                  <Text style={styles.blankTitle}>No Projects in Workspace</Text>
+                  <Text style={styles.blankSub}>Tap to open a project by Project ID or path.</Text>
                 </TouchableOpacity>
-              );
-            })() : (
-              <TouchableOpacity
-                style={styles.blankSlateCard}
-                onPress={() => setShowCreateModal(true)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.blankIconCircle}>
-                  <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
-                </View>
-                <Text style={styles.blankTitle}>No Cloud Agent Deployed</Text>
-                <Text style={styles.blankSub}>Tap to configure an agent on this server.</Text>
-              </TouchableOpacity>
-            )
+              ) : (
+                filteredProjects.map((project: ProjectItem) => (
+                  <TouchableOpacity
+                    key={project.id}
+                    style={styles.projectRow}
+                    onPress={() => openProject(project.id, false)}
+                    activeOpacity={0.75}
+                  >
+                    {/* Project Folder / Git Icon */}
+                    <View style={styles.projectIconBox}>
+                      {project.hasGit ? (
+                        <FolderGit2 size={20} color="#10B981" strokeWidth={2} />
+                      ) : (
+                        <Folder size={20} color="#3B82F6" strokeWidth={2} />
+                      )}
+                    </View>
+
+                    {/* Project Details */}
+                    <View style={styles.projectInfoCol}>
+                      <View style={styles.projectNameRow}>
+                        <Text style={styles.projectName} numberOfLines={1}>
+                          {project.name}
+                        </Text>
+                        <View style={styles.idChip}>
+                          <Text style={styles.idChipText}>{project.id}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.projectMetaRow}>
+                        {project.branch ? (
+                          <Text style={styles.branchText}> {project.branch}</Text>
+                        ) : null}
+                        <Text style={styles.projectPathText} numberOfLines={1}>
+                          {project.path}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Right Action: Dedicated Interactive Terminal Button */}
+                    <TouchableOpacity
+                      style={styles.terminalActionBtn}
+                      onPress={() => openProject(project.id, true)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel={`Open terminal for ${project.name}`}
+                    >
+                      <Terminal size={17} color="#38BDF8" strokeWidth={2.2} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
           )}
         </View>
 
-        {/* Accordion 2: Agents (Matching dense_041) */}
+        {/* ============================================================== */}
+        {/* Accordion 2: Agents (Workspace-isolated agents)                */}
+        {/* ============================================================== */}
         <View style={styles.accordionGroup}>
           <View style={styles.accordionHeaderRow}>
             <TouchableOpacity
@@ -231,11 +316,14 @@ export const HomeScreen: React.FC = () => {
                 <ChevronRight size={14} color="#71717A" />
               )}
               <Text style={styles.accordionTitle}>Agents</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{filteredAgents.length}</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.moreBtn}
-              onPress={() => setSectionMenuAnchor('custom')}
+              onPress={() => setSectionMenuAnchor('agents')}
               activeOpacity={0.7}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
@@ -255,20 +343,22 @@ export const HomeScreen: React.FC = () => {
                   <View style={styles.blankIconCircle}>
                     <Plus size={20} color="#FFFFFF" strokeWidth={2.4} />
                   </View>
-                  <Text style={styles.blankTitle}>Add your first agent</Text>
+                  <Text style={styles.blankTitle}>Add an agent to this workspace</Text>
                   <Text style={styles.blankSub}>
-                    Configure its creature avatar, model engine, and instructions.
+                    Configure its avatar, model engine, and instructions.
                   </Text>
                 </TouchableOpacity>
               ) : (
                 filteredAgents.map((agent) => {
                   const msgs = messages[agent.id] || [];
-                  const lastMsg = msgs.length > 0
-                    ? msgs[msgs.length - 1].content.replace(/\n+/g, ' ')
-                    : (agent.instructions || 'No messages yet');
-                  const dateText = msgs.length > 0
-                    ? (msgs[msgs.length - 1].timestamp || '19 Oct')
-                    : '19 Oct';
+                  const lastMsg =
+                    msgs.length > 0
+                      ? msgs[msgs.length - 1].content.replace(/\n+/g, ' ')
+                      : agent.instructions || 'Ready for instructions';
+                  const dateText =
+                    msgs.length > 0
+                      ? msgs[msgs.length - 1].timestamp || 'Today'
+                      : 'Today';
 
                   return (
                     <TouchableOpacity
@@ -284,7 +374,12 @@ export const HomeScreen: React.FC = () => {
                         showGlow={false}
                       />
                       <View style={styles.agentInfoCol}>
-                        <Text style={styles.agentName}>{agent.name}</Text>
+                        <View style={styles.agentHeaderNameRow}>
+                          <Text style={styles.agentName}>{agent.name}</Text>
+                          <View style={styles.agentIdBadge}>
+                            <Text style={styles.agentIdBadgeText}>{agent.id}</Text>
+                          </View>
+                        </View>
                         {agent.role ? (
                           <Text style={styles.agentRole} numberOfLines={1}>
                             {agent.role}
@@ -302,9 +397,7 @@ export const HomeScreen: React.FC = () => {
             </View>
           )}
         </View>
-      </>
-    )}
-  </ScrollView>
+      </ScrollView>
 
       {/* Agent Creator Modal */}
       <CreateAgentModal
@@ -312,7 +405,63 @@ export const HomeScreen: React.FC = () => {
         onClose={() => setShowCreateModal(false)}
       />
 
-      {/* Section 3-Dots Action Popup (Matching dense_053) */}
+      {/* Open by ID Modal (Clean and simple dialog) */}
+      <Modal
+        visible={showOpenByIdModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowOpenByIdModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.popupBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowOpenByIdModal(false)}
+        >
+          <View style={styles.openByIdModalCard} onStartShouldSetResponder={() => true}>
+            <View style={styles.openByIdHeader}>
+              <View style={styles.openByIdIcon}>
+                <Hash size={18} color="#38BDF8" strokeWidth={2.4} />
+              </View>
+              <Text style={styles.openByIdTitle}>Open by ID</Text>
+            </View>
+            <Text style={styles.openByIdSub}>
+              Enter a Project ID (e.g. prj-o-one) or Agent ID (e.g. agent-1) to jump directly into
+              it.
+            </Text>
+
+            <TextInput
+              style={styles.openByIdInput}
+              placeholder="e.g. prj-o-one or agent-1"
+              placeholderTextColor="#71717A"
+              value={lookupIdInput}
+              onChangeText={setLookupIdInput}
+              autoFocus
+              onSubmitEditing={handleOpenById}
+            />
+
+            <View style={styles.openByIdActionRow}>
+              <TouchableOpacity
+                style={styles.openByIdCancelBtn}
+                onPress={() => setShowOpenByIdModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.openByIdCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.openByIdSubmitBtn}
+                onPress={handleOpenById}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.openByIdSubmitText}>Open</Text>
+                <ArrowRight size={15} color="#000000" strokeWidth={2.4} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Section 3-Dots Action Popup */}
       <Modal
         visible={sectionMenuAnchor !== null}
         transparent
@@ -333,18 +482,18 @@ export const HomeScreen: React.FC = () => {
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.popupItemText}>Add agent</Text>
+              <Text style={styles.popupItemText}>Add Agent</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.popupItem}
               onPress={() => {
                 setSectionMenuAnchor(null);
-                setShowCreateModal(true);
+                setShowOpenByIdModal(true);
               }}
               activeOpacity={0.7}
             >
-              <Text style={styles.popupItemText}>New section</Text>
+              <Text style={styles.popupItemText}>Open Project / Agent by ID</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -352,7 +501,7 @@ export const HomeScreen: React.FC = () => {
               onPress={() => setSectionMenuAnchor(null)}
               activeOpacity={0.7}
             >
-              <Text style={styles.popupItemTextMuted}>Mark all as read</Text>
+              <Text style={styles.popupItemTextMuted}>Refresh Workspace</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -412,6 +561,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 40,
   },
+  workspaceBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#141418',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  workspaceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  workspaceBannerText: {
+    fontSize: 12,
+    color: '#A1A1AA',
+    flex: 1,
+  },
+  workspaceBannerBold: {
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  openByIdBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  openByIdBadgeText: {
+    fontSize: 11,
+    color: '#38BDF8',
+    fontWeight: '700',
+  },
   accordionGroup: {
     marginBottom: 20,
   },
@@ -432,147 +621,277 @@ const styles = StyleSheet.create({
     color: '#E4E4E7',
     letterSpacing: -0.2,
   },
+  countBadge: {
+    backgroundColor: '#27272A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  countBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#A1A1AA',
+  },
   moreBtn: {
     padding: 4,
+  },
+  projectListWrap: {
+    gap: 8,
+  },
+  projectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#151518',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  projectIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#1E1E24',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  projectInfoCol: {
+    flex: 1,
+  },
+  projectNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  projectName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  idChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  idChipText: {
+    fontSize: 10.5,
+    fontFamily: 'monospace',
+    color: '#A1A1AA',
+  },
+  projectMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 3,
+  },
+  branchText: {
+    fontSize: 11,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  projectPathText: {
+    fontSize: 11,
+    color: '#71717A',
+    flex: 1,
+  },
+  terminalActionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
   },
   agentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
   },
   agentInfoCol: {
     flex: 1,
     marginLeft: 14,
     justifyContent: 'center',
   },
-  agentName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-    marginBottom: 2,
-  },
-  agentRole: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginBottom: 2,
-  },
-  agentLastMsg: {
-    fontSize: 13,
-    color: '#71717A',
-  },
-  dateText: {
-    fontSize: 12,
-    color: '#71717A',
-    marginLeft: 10,
-    alignSelf: 'flex-start',
-    paddingTop: 4,
-  },
-  heroBlankCard: {
-    alignItems: 'center',
-    backgroundColor: '#16161A',
-    borderRadius: 20,
-    padding: 30,
-    marginVertical: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  heroAvatarWrap: {
-    marginBottom: 16,
-  },
-  heroBlankTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  heroBlankSub: {
-    fontSize: 13,
-    color: '#A1A1AA',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 20,
-  },
-  heroCreateBtn: {
+  agentHeaderNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
   },
-  heroCreateBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+  agentName: {
+    fontSize: 15.5,
     fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+  },
+  agentIdBadge: {
+    backgroundColor: 'rgba(37, 99, 235, 0.15)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 5,
+  },
+  agentIdBadgeText: {
+    fontSize: 10,
+    color: '#60A5FA',
+    fontFamily: 'monospace',
+  },
+  agentRole: {
+    fontSize: 12,
+    color: '#3B82F6',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  agentLastMsg: {
+    fontSize: 12.5,
+    color: '#71717A',
+    marginTop: 2,
+  },
+  dateText: {
+    fontSize: 11.5,
+    color: '#52525B',
+    marginLeft: 8,
   },
   blankSlateCard: {
-    alignItems: 'center',
-    backgroundColor: '#141418',
+    backgroundColor: '#16161A',
     borderRadius: 16,
-    padding: 24,
-    marginTop: 8,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  blankIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#272730',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginVertical: 4,
+  },
+  blankIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(37, 99, 235, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   blankTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   blankSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#71717A',
     textAlign: 'center',
-    lineHeight: 16,
   },
   popupBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-    paddingTop: 100,
-    paddingRight: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
   popupCard: {
-    width: 170,
-    backgroundColor: '#242429',
-    borderRadius: 14,
-    paddingVertical: 4,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 12,
+    backgroundColor: '#1C1C20',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    width: '80%',
+    overflow: 'hidden',
   },
   popupItem: {
-    paddingVertical: 11,
-    paddingHorizontal: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.06)',
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   popupItemText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   popupItemTextMuted: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 14,
     color: '#71717A',
+  },
+  openByIdModalCard: {
+    backgroundColor: '#18181C',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  openByIdHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 6,
+  },
+  openByIdIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openByIdTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  openByIdSub: {
+    fontSize: 12,
+    color: '#A1A1AA',
+    marginBottom: 14,
+    lineHeight: 17,
+  },
+  openByIdInput: {
+    backgroundColor: '#121215',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    color: '#FFFFFF',
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontFamily: 'monospace',
+    marginBottom: 16,
+  },
+  openByIdActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  openByIdCancelBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#27272A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openByIdCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#A1A1AA',
+  },
+  openByIdSubmitBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  openByIdSubmitText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000000',
   },
 });

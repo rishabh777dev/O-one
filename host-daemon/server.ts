@@ -15,6 +15,34 @@ const isWin = os.platform() === 'win32';
 const hermesBin = isWin ? 'hermes.cmd' : 'hermes';
 const DATA_DIR = path.join(__dirname, 'data');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
+const KNOWLEDGE_DIR = path.join(DATA_DIR, 'knowledge');
+
+// Seed shared knowledge files if missing
+if (!fs.existsSync(KNOWLEDGE_DIR)) {
+  fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+}
+const seedKnowledge = [
+  {
+    name: 'workspace-architecture.md',
+    content: '# Shared Workspace Architecture\n\nAll three workspaces (Host PC, On-Device Standalone Linux, and Remote SSH) share this knowledge base for common guidelines, architecture specs, and environment context.',
+  },
+  {
+    name: 'coding-standards.md',
+    content: '# Coding Standards\n\n- Strict TypeScript typing across frontend & host-daemon\n- Clear and spacious chat interface while pair-programming\n- Collapsible micro-tools (Files, Terminal, Knowledge)\n- Isolated workspace agent states with cross-server shared knowledge',
+  },
+  {
+    name: 'environment-manifest.json',
+    content: '{\n  "version": "2.0.0",\n  "sharedKnowledge": true,\n  "supportedEngines": ["Hermes 3", "Antigravity ACP", "OpenRouter"],\n  "knowledgeSync": "active"\n}',
+  },
+];
+for (const item of seedKnowledge) {
+  const p = path.join(KNOWLEDGE_DIR, item.name);
+  if (!fs.existsSync(p)) {
+    try {
+      fs.writeFileSync(p, item.content, 'utf-8');
+    } catch {}
+  }
+}
 
 const HERMES_DB_PATH = path.join(
   process.env.USERPROFILE || 'C:\\Users\\risha',
@@ -551,7 +579,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     }
 
     // -------------------------------------------------------------
-    // 10. REAL WORKSPACE DIRECTORY DISCOVERY
+    // 10. REAL WORKSPACE DIRECTORY DISCOVERY & FILE TREE
     // -------------------------------------------------------------
     case 'fs.listProjects': {
       const baseDir = params.baseDir || 'D:\\project';
@@ -566,15 +594,149 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
           .map((dir) => {
             const projectPath = path.join(baseDir, dir.name);
             const hasGit = fs.existsSync(path.join(projectPath, '.git'));
+            const cleanId = `prj-${dir.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            let branch = 'main';
+            if (hasGit) {
+              try {
+                const head = fs.readFileSync(path.join(projectPath, '.git', 'HEAD'), 'utf-8');
+                const branchMatch = head.match(/ref: refs\/heads\/(.+)/);
+                if (branchMatch) branch = branchMatch[1].trim();
+              } catch {}
+            }
             return {
+              id: cleanId,
               name: dir.name,
               path: projectPath,
               hasGit,
+              branch,
+              agentId: `agent-${dir.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
             };
           });
         ws.send(JSON.stringify({ id, result: projects }));
       } catch (err: any) {
         ws.send(JSON.stringify({ id, error: err.message, result: [] }));
+      }
+      break;
+    }
+
+    case 'fs.readTree': {
+      const targetDir = params.path || process.cwd();
+      try {
+        if (!fs.existsSync(targetDir)) {
+          ws.send(JSON.stringify({ id, error: 'Directory does not exist', result: [] }));
+          return;
+        }
+
+        function walk(dir: string, currentDepth: number, maxDepth: number): any[] {
+          if (currentDepth > maxDepth) return [];
+          let entries: fs.Dirent[] = [];
+          try {
+            entries = fs.readdirSync(dir, { withFileTypes: true });
+          } catch {
+            return [];
+          }
+          const items: any[] = [];
+          for (const entry of entries) {
+            if (['node_modules', '.git', '.expo', 'dist', 'build', '.cache'].includes(entry.name)) {
+              continue;
+            }
+            const fullPath = path.join(dir, entry.name);
+            const relPath = path.relative(targetDir, fullPath).replace(/\\/g, '/');
+            const isDir = entry.isDirectory();
+            let size = 0;
+            if (!isDir) {
+              try {
+                size = fs.statSync(fullPath).size;
+              } catch {}
+            }
+            items.push({
+              name: entry.name,
+              path: relPath,
+              fullPath,
+              isDir,
+              size,
+              children: isDir && currentDepth < maxDepth ? walk(fullPath, currentDepth + 1, maxDepth) : [],
+            });
+          }
+          return items.sort((a, b) => (b.isDir ? 1 : 0) - (a.isDir ? 1 : 0) || a.name.localeCompare(b.name));
+        }
+
+        const tree = walk(targetDir, 1, params.maxDepth || 2);
+        ws.send(JSON.stringify({ id, result: tree }));
+      } catch (err: any) {
+        ws.send(JSON.stringify({ id, error: err.message, result: [] }));
+      }
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // SHARED KNOWLEDGE BASE (Accessible across all 3 servers)
+    // -------------------------------------------------------------
+    case 'knowledge.list': {
+      try {
+        if (!fs.existsSync(KNOWLEDGE_DIR)) {
+          fs.mkdirSync(KNOWLEDGE_DIR, { recursive: true });
+        }
+        const files = fs.readdirSync(KNOWLEDGE_DIR);
+        const results = files.map((file) => {
+          const filePath = path.join(KNOWLEDGE_DIR, file);
+          const stat = fs.statSync(filePath);
+          let content = '';
+          try {
+            content = fs.readFileSync(filePath, 'utf-8');
+          } catch {}
+          return {
+            id: file,
+            name: file,
+            size: stat.size,
+            updatedAt: stat.mtime.toISOString(),
+            content,
+          };
+        });
+        ws.send(JSON.stringify({ id, result: results }));
+      } catch (err: any) {
+        ws.send(JSON.stringify({ id, error: err.message, result: [] }));
+      }
+      break;
+    }
+
+    case 'knowledge.save': {
+      try {
+        const { name, content, description } = params;
+        if (!name) {
+          ws.send(JSON.stringify({ id, error: 'File name is required' }));
+          return;
+        }
+        const safeName = path.basename(name);
+        const filePath = path.join(KNOWLEDGE_DIR, safeName);
+        fs.writeFileSync(filePath, content || '', 'utf-8');
+        const stat = fs.statSync(filePath);
+        const fileObj = {
+          id: safeName,
+          name: safeName,
+          size: stat.size,
+          updatedAt: stat.mtime.toISOString(),
+          content: content || '',
+          description: description || '',
+        };
+        ws.send(JSON.stringify({ id, result: { success: true, file: fileObj } }));
+      } catch (err: any) {
+        ws.send(JSON.stringify({ id, error: err.message }));
+      }
+      break;
+    }
+
+    case 'knowledge.delete': {
+      try {
+        const { name } = params;
+        const safeName = path.basename(name);
+        const filePath = path.join(KNOWLEDGE_DIR, safeName);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+        ws.send(JSON.stringify({ id, result: { success: true } }));
+      } catch (err: any) {
+        ws.send(JSON.stringify({ id, error: err.message }));
       }
       break;
     }

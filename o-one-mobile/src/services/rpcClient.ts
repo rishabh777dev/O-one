@@ -8,11 +8,17 @@ export interface RPCRequest {
 
 export interface RPCResponse {
   id: string;
-  type?: 'stdout' | 'stderr' | 'done' | 'telemetry' | 'stream_token' | 'process_exit';
+  type?: 'stdout' | 'stderr' | 'done' | 'telemetry' | 'stream_token' | 'process_exit' | 'session_info' | 'result';
   token?: string;
   result?: any;
   error?: string;
   data?: any;
+  exitCode?: number;
+  sessionId?: string;
+  sessionTitle?: string;
+  sessions?: any[];
+  messages?: any[];
+  [key: string]: any;
 }
 
 export type MessageHandler = (res: RPCResponse) => void;
