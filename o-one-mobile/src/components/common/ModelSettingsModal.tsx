@@ -72,13 +72,17 @@ export function formatProviderName(raw: string, slug?: string): string {
 
 const PROVIDER_MODELS: {
   provider: string;
+  slug?: string;
   engine: string;
+  category?: 'hermes' | 'standalone';
   isCurrent?: boolean;
   models: { id: string; name: string; desc: string }[];
 }[] = [
   {
     provider: 'OpenAI',
+    slug: 'openai-codex',
     engine: 'hermes',
+    category: 'hermes',
     isCurrent: true,
     models: [
       {
@@ -87,60 +91,62 @@ const PROVIDER_MODELS: {
         desc: 'Hermes agent running via ChatGPT / Codex Subscription',
       },
       {
-        id: 'gpt-4o',
-        name: 'GPT-4o (Codex)',
-        desc: 'Fast multimodal code and tool reasoning',
-      },
-      {
         id: 'gpt-6-luna',
         name: 'GPT-6 Luna',
         desc: 'Frontier reasoning model with extended context',
       },
+      {
+        id: 'gpt-4o',
+        name: 'GPT-4o (Codex)',
+        desc: 'Fast multimodal code and tool reasoning',
+      },
     ],
   },
   {
-    provider: 'Antigravity',
+    provider: 'OpenCode CLI',
+    slug: 'opencode-cli',
+    engine: 'opencode',
+    category: 'standalone',
+    isCurrent: false,
+    models: [
+      {
+        id: 'opencode/mimo-v2.6-flash-free',
+        name: 'MiMo-V2.6-Flash Free',
+        desc: 'Fast multimodal coding intelligence (OpenCode CLI)',
+      },
+      {
+        id: 'opencode/deepseek-v4.1-flash-free',
+        name: 'DeepSeek V4.1 Flash Free',
+        desc: 'MoE coding reasoning model (OpenCode CLI)',
+      },
+      {
+        id: 'opencode/nemotron-3.5-lightning-free',
+        name: 'Nemotron 3.5 Lightning Free',
+        desc: 'High-speed accelerated inference (OpenCode CLI)',
+      },
+    ],
+  },
+  {
+    provider: 'Antigravity CLI ACP',
+    slug: 'antigravity',
     engine: 'antigravity',
+    category: 'standalone',
     isCurrent: false,
     models: [
       {
-        id: 'gemini-2.5-pro',
-        name: 'Gemini 2.5 Pro (Antigravity)',
-        desc: 'Autonomous multi-file editing, git branches & planning',
+        id: 'gemini-3.8-flash-high',
+        name: 'Gemini 3.8 Flash (High)',
+        desc: 'Frontier reasoning effort (Antigravity CLI)',
       },
       {
-        id: 'gemini-2.5-flash',
-        name: 'Gemini 2.5 Flash',
-        desc: 'Sub-second tool latency and instant patches',
-      },
-    ],
-  },
-  {
-    provider: 'DeepSeek',
-    engine: 'deepseek',
-    isCurrent: false,
-    models: [
-      {
-        id: 'deepseek-ai/DeepSeek-V3',
-        name: 'DeepSeek-V3',
-        desc: '671B MoE architecture with exceptional code ability',
+        id: 'gemini-3.8-flash-medium',
+        name: 'Gemini 3.8 Flash (Medium)',
+        desc: 'Balanced speed and multi-step reasoning (Antigravity CLI)',
       },
       {
-        id: 'deepseek-ai/DeepSeek-R1',
-        name: 'DeepSeek-R1 (Reasoning)',
-        desc: 'Chain-of-thought mathematical and algorithmic synthesis',
-      },
-    ],
-  },
-  {
-    provider: 'Anthropic Claude',
-    engine: 'claude',
-    isCurrent: false,
-    models: [
-      {
-        id: 'claude-3-7-sonnet',
-        name: 'Claude 3.7 Sonnet',
-        desc: 'Hybrid reasoning and deep codebase exploration',
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6 (Thinking)',
+        desc: 'Extended thinking and codebase exploration (Antigravity CLI)',
       },
     ],
   },

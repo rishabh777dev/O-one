@@ -144,6 +144,73 @@ try {
   });
 } catch {}
 
+// -------------------------------------------------------------
+// DYNAMIC CLI MODELS (Fetched directly from opencode & agy CLIs)
+// -------------------------------------------------------------
+let dynamicOpencodeModels: any[] = [
+  { id: 'opencode/mimo-v2.6-flash-free', name: 'MiMo-V2.6-Flash Free', desc: 'Fast multimodal coding intelligence (OpenCode CLI)' },
+  { id: 'opencode/deepseek-v4.1-flash-free', name: 'DeepSeek V4.1 Flash Free', desc: 'MoE coding reasoning model (OpenCode CLI)' },
+  { id: 'opencode/nemotron-3.5-lightning-free', name: 'Nemotron 3.5 Lightning Free', desc: 'High-speed accelerated inference (OpenCode CLI)' },
+  { id: 'opencode/nemotron-3-ultra-free', name: 'Nemotron 3 Ultra Free', desc: '1M context ultra reasoning model (OpenCode CLI)' },
+  { id: 'opencode/nemotron-3.5-super-vl-free', name: 'Nemotron 3.5 Super VL Free', desc: 'Visual understanding and reasoning (OpenCode CLI)' },
+  { id: 'opencode/flint-40b-free', name: 'Flint 40B Free', desc: '256k context coding engine (OpenCode CLI)' },
+  { id: 'opencode/glm-5.3-flash-free', name: 'GLM-5.3-Flash Free', desc: 'Bilingual coding and function call synthesis (OpenCode CLI)' },
+  { id: 'opencode/beam-free', name: 'Beam Free', desc: 'Low-latency code generator (OpenCode CLI)' },
+  { id: 'opencode/big-pickle', name: 'Big Pickle', desc: '200k context code reasoning model (OpenCode CLI)' },
+];
+
+let dynamicAgyModels: any[] = [
+  { id: 'gemini-3.8-flash-high', name: 'Gemini 3.8 Flash (High)', desc: 'Frontier reasoning effort (Antigravity CLI)' },
+  { id: 'gemini-3.8-flash-medium', name: 'Gemini 3.8 Flash (Medium)', desc: 'Balanced speed and multi-step reasoning (Antigravity CLI)' },
+  { id: 'gemini-3.8-flash-low', name: 'Gemini 3.8 Flash (Low)', desc: 'Instant sub-second patches and tool calls (Antigravity CLI)' },
+  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6 (Thinking)', desc: 'Extended thinking and codebase exploration (Antigravity CLI)' },
+  { id: 'claude-opus-4-6-thinking', name: 'Claude Opus 4.6 (Thinking)', desc: 'Deep synthesis and architecture analysis (Antigravity CLI)' },
+  { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)', desc: 'Open-weight frontier coding model (Antigravity CLI)' },
+];
+
+function refreshCliModels() {
+  exec(isWin ? 'opencode.cmd models' : 'opencode models', (err, stdout) => {
+    if (!err && stdout) {
+      const lines = stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        dynamicOpencodeModels = lines.map((mId) => {
+          const shortName = mId.replace('opencode/', '');
+          const formatted = shortName
+            .split('-')
+            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+            .join(' ');
+          return {
+            id: mId,
+            name: formatted,
+            desc: `Live model streamed directly from OpenCode CLI (${mId})`,
+          };
+        });
+        console.log(`[O1 Host Daemon] Loaded ${dynamicOpencodeModels.length} dynamic models from OpenCode CLI`);
+      }
+    }
+  });
+
+  exec(isWin ? 'agy.EXE models' : 'agy models', (err, stdout) => {
+    if (!err && stdout) {
+      const lines = stdout.trim().split('\n').filter((l) => l.includes('\t'));
+      if (lines.length > 0) {
+        dynamicAgyModels = lines.map((l) => {
+          const [mId, mName] = l.split('\t');
+          return {
+            id: mId.trim(),
+            name: (mName || mId).trim(),
+            desc: `Live model streamed directly from Antigravity CLI (${mId.trim()})`,
+          };
+        });
+        console.log(`[O1 Host Daemon] Loaded ${dynamicAgyModels.length} dynamic models from Antigravity CLI`);
+      }
+    }
+  });
+}
+
+// Initial refresh on startup
+refreshCliModels();
+
 function pushTelemetry(ws: WebSocket) {
   if (ws.readyState !== WebSocket.OPEN) return;
   const cpus = os.cpus();
@@ -1039,6 +1106,9 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
         // Sort Hermes providers so the currently active provider is at the top
         groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
 
+        // Trigger async refresh of CLI models
+        refreshCliModels();
+
         // 2. STANDALONE ENGINES (Direct CLI on Host PC, accessible via WebSocket)
         const standaloneEngines: any[] = [
           {
@@ -1048,23 +1118,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             category: 'standalone',
             isCurrent: false,
             desc: 'Direct OpenCode runtime on host PC (opencode run / serve via WS)',
-            models: [
-              {
-                id: 'opencode/default',
-                name: 'OpenCode Default Agent',
-                desc: 'Full-capability OpenCode CLI engine on host PC',
-              },
-              {
-                id: 'opencode/jev',
-                name: 'OpenCode Jev 1.13',
-                desc: 'TypeSafe reasoning & code decision model via OpenCode CLI',
-              },
-              {
-                id: 'opencode/muse-spark',
-                name: 'OpenCode Muse Spark',
-                desc: 'High-speed code synthesis and refactoring via OpenCode CLI',
-              },
-            ],
+            models: dynamicOpencodeModels,
           },
           {
             provider: 'Antigravity CLI ACP',
@@ -1073,18 +1127,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             category: 'standalone',
             isCurrent: false,
             desc: 'Google Deepmind Advanced Agentic Coding CLI (agy on host PC)',
-            models: [
-              {
-                id: 'gemini-2.5-pro',
-                name: 'Gemini 2.5 Pro (Antigravity)',
-                desc: 'Autonomous multi-file planning, git diffs & code execution',
-              },
-              {
-                id: 'gemini-2.5-flash',
-                name: 'Gemini 2.5 Flash',
-                desc: 'Sub-second tool latency and instant code edits',
-              },
-            ],
+            models: dynamicAgyModels,
           },
           {
             provider: 'Claude Code CLI',
@@ -1096,8 +1139,13 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
             models: [
               {
                 id: 'claude-3-7-sonnet',
-                name: 'Claude 3.7 Sonnet (Claude Code)',
+                name: 'Claude 3.7 Sonnet',
                 desc: 'Hybrid reasoning and deep codebase exploration',
+              },
+              {
+                id: 'claude-3-5-sonnet',
+                name: 'Claude 3.5 Sonnet',
+                desc: 'Fast architectural synthesis & multi-file coding',
               },
             ],
           },
