@@ -13,19 +13,19 @@ import { rpcClient } from '../services/rpcClient';
 import { useAppStore } from '../store/useAppStore';
 import { TerminalLog } from '../types';
 
-type ShellType = 'wsl' | 'powershell' | 'cmd';
+type ShellType = 'phone' | 'wsl' | 'powershell' | 'cmd';
 
 const PRESET_COMMANDS = [
-  { label: 'uname -a (Kernel)', cmd: 'uname -a', shell: 'wsl' as ShellType },
-  { label: 'Ubuntu Version', cmd: 'cat /etc/os-release | grep PRETTY_NAME', shell: 'wsl' as ShellType },
-  { label: 'Active Processes', cmd: 'ps aux | head -n 12', shell: 'wsl' as ShellType },
-  { label: 'Install MCP Tool', cmd: 'npm install -g @modelcontextprotocol/server-postgres', shell: 'powershell' as ShellType },
-  { label: 'Hermes Status', cmd: 'hermes status', shell: 'powershell' as ShellType },
-  { label: 'Git Status', cmd: 'git status -s', shell: 'powershell' as ShellType },
+  { label: '📱 Install Phone Node/Python', cmd: 'pkg install nodejs python git', shell: 'phone' as ShellType },
+  { label: '⚡ Install Claude Code CLI', cmd: 'npm install -g @anthropic-ai/claude-code', shell: 'powershell' as ShellType },
+  { label: '🧠 Install Hermes CLI', cmd: 'pip install hermes-agent', shell: 'wsl' as ShellType },
+  { label: '🦙 Install Ollama Local LLM', cmd: 'curl -fsSL https://ollama.com/install.sh | sh', shell: 'wsl' as ShellType },
+  { label: '🔍 Detect Installed Engines', cmd: 'detect-engines', shell: 'phone' as ShellType },
+  { label: 'Kernel Telemetry', cmd: 'uname -a', shell: 'wsl' as ShellType },
 ];
 
 export const TerminalScreen: React.FC = () => {
-  const { setSurface, openDrawer } = useAppStore();
+  const { setSurface, openDrawer, terminalInitialCommand, terminalInitialShell } = useAppStore();
   const [shellType, setShellType] = useState<ShellType>('wsl');
   const [commandInput, setCommandInput] = useState('');
   const [isRunning, setIsRunning] = useState(false);
@@ -33,18 +33,27 @@ export const TerminalScreen: React.FC = () => {
     {
       id: 'init-1',
       type: 'info',
-      content: 'Linux Kernel & Host Terminal connected.',
+      content: 'Workspace Shell & Terminal connected.',
       timestamp: 'system',
     },
     {
       id: 'init-2',
       type: 'info',
-      content: 'Select [WSL2 Ubuntu 24.04] for direct Linux kernel execution or [PowerShell] for host commands.',
+      content: 'Run any command (npm, pip, pkg, apt) to install CLIs or engines directly in this environment.',
       timestamp: 'system',
     },
   ]);
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (terminalInitialCommand) {
+      setCommandInput(terminalInitialCommand);
+    }
+    if (terminalInitialShell) {
+      setShellType(terminalInitialShell as ShellType);
+    }
+  }, [terminalInitialCommand, terminalInitialShell]);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -55,10 +64,42 @@ export const TerminalScreen: React.FC = () => {
     const cmd = rawCmd.trim();
     if (!cmd || isRunning) return;
 
+    if (cmd === 'detect-engines') {
+      const inputLog: TerminalLog = {
+        id: `log-${Date.now()}`,
+        type: 'input',
+        content: `Checking installed CLI engines in PATH...`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setLogs((prev) => [...prev, inputLog]);
+      setIsRunning(true);
+      rpcClient.send('tools.detectCLIs', {}, (res) => {
+        setIsRunning(false);
+        if (res.result && Array.isArray(res.result)) {
+          const lines = res.result.map((cli: any) =>
+            cli.installed
+              ? `  [✓ INSTALLED] ${cli.name} -> ${cli.path}`
+              : `  [✗ MISSING]   ${cli.name} -> To install: ${cli.installCmd}`
+          );
+          setLogs((prev) => [
+            ...prev,
+            {
+              id: `cli-${Date.now()}`,
+              type: 'info',
+              content: `Engine Detection Report:\n${lines.join('\n')}`,
+              timestamp: '',
+            },
+          ]);
+        }
+      });
+      setCommandInput('');
+      return;
+    }
+
     const inputLog: TerminalLog = {
       id: `log-${Date.now()}`,
       type: 'input',
-      content: `${shellType === 'wsl' ? 'rishi@ubuntu:~$' : 'PS>'} ${cmd}`,
+      content: `${shellType === 'phone' ? 'phone:~$ ' : shellType === 'wsl' ? 'rishi@ubuntu:~$ ' : 'PS> '} ${cmd}`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
     };
 
@@ -134,12 +175,22 @@ export const TerminalScreen: React.FC = () => {
       <View style={styles.shellBar}>
         <View style={styles.shellSelector}>
           <TouchableOpacity
+            style={[styles.shellTab, shellType === 'phone' && styles.shellTabActive]}
+            onPress={() => setShellType('phone')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.shellTabText, shellType === 'phone' && styles.shellTabTextActive]}>
+              📱 Phone Shell
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.shellTab, shellType === 'wsl' && styles.shellTabActive]}
             onPress={() => setShellType('wsl')}
             activeOpacity={0.7}
           >
             <Text style={[styles.shellTabText, shellType === 'wsl' && styles.shellTabTextActive]}>
-              🐧 Ubuntu 24.04 (WSL2)
+              🐧 Ubuntu (WSL2)
             </Text>
           </TouchableOpacity>
 
@@ -235,15 +286,17 @@ export const TerminalScreen: React.FC = () => {
       <View style={styles.commandInputRow}>
         <View style={styles.promptBadge}>
           <Text style={styles.promptBadgeText}>
-            {shellType === 'wsl' ? 'linux$' : 'PS>'}
+            {shellType === 'phone' ? 'phone$' : shellType === 'wsl' ? 'linux$' : 'PS>'}
           </Text>
         </View>
 
         <TextInput
           style={styles.commandTextInput}
           placeholder={
-            shellType === 'wsl'
-              ? 'Run Linux command (e.g. apt, python, uname)...'
+            shellType === 'phone'
+              ? 'Run phone/termux command (e.g. pkg, npm, python)...'
+              : shellType === 'wsl'
+              ? 'Run Linux command (e.g. apt, curl, python)...'
               : 'Run host command (e.g. npm, git, hermes)...'
           }
           placeholderTextColor={colors.textMuted}

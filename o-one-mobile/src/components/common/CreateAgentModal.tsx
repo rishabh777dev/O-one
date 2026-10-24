@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Check, Shuffle, Sparkles, Cpu, Layers } from 'lucide-react-native';
+import { X, Check, Shuffle, Sparkles, Cpu, Layers, Terminal } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { CreatureAvatar, CREATURE_COLORS } from './CreatureAvatar';
 import { useAppStore } from '../../store/useAppStore';
@@ -66,7 +66,7 @@ interface CreateAgentModalProps {
 
 export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
-  const { addAgent } = useAppStore();
+  const { addAgent, openTerminalWithCommand } = useAppStore();
 
   const [shapeIndex, setShapeIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(COLOR_PALETTE[0]);
@@ -337,6 +337,21 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ visible, onC
                   );
                 })}
               </View>
+
+              {/* Install New Engine CLI in Terminal */}
+              <TouchableOpacity
+                style={styles.installCliPromptBtn}
+                onPress={() => {
+                  onClose();
+                  openTerminalWithCommand('detect-engines', 'phone');
+                }}
+                activeOpacity={0.7}
+              >
+                <Terminal size={14} color="#10B981" strokeWidth={2.4} />
+                <Text style={styles.installCliPromptText}>
+                  Install or detect CLI engines via Terminal (Claude, Ollama, Hermes)...
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
@@ -537,5 +552,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#71717A',
     fontFamily: 'monospace',
+  },
+  installCliPromptBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  installCliPromptText: {
+    fontSize: 11.5,
+    color: '#10B981',
+    fontWeight: '600',
+    flex: 1,
   },
 });

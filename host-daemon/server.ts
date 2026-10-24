@@ -391,11 +391,11 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     }
 
     // -------------------------------------------------------------
-    // 3. INTERACTIVE TERMINAL / LINUX KERNEL COMMAND RUNNER
+    // 3. INTERACTIVE TERMINAL / LINUX KERNEL / PHONE COMMAND RUNNER
     // -------------------------------------------------------------
     case 'terminal.execute': {
       const command = params.command || '';
-      const shellType = params.shellType || 'wsl'; // 'wsl' | 'powershell' | 'cmd'
+      const shellType = params.shellType || 'wsl'; // 'wsl' | 'powershell' | 'cmd' | 'phone' | 'bash'
       const cwd = params.cwd || process.cwd();
 
       console.log(`[O1 Terminal] Executing [${shellType}]: ${command}`);
@@ -404,6 +404,10 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       if (shellType === 'wsl') {
         // Execute inside real Linux Kernel (WSL2 Ubuntu 24.04)
         child = spawn('wsl', ['bash', '-c', command], { shell: false });
+      } else if (shellType === 'phone' || shellType === 'bash') {
+        // Direct bash or sh execution on Linux/Android Termux
+        const shellBin = isWin ? 'bash' : (fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh');
+        child = spawn(shellBin, ['-c', command], { cwd, shell: isWin });
       } else if (shellType === 'powershell') {
         child = spawn('powershell', ['-NoProfile', '-Command', command], { cwd, shell: true });
       } else {
@@ -420,6 +424,44 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
 
       child.on('close', (code) => {
         ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+      });
+      break;
+    }
+
+    // -------------------------------------------------------------
+    // 3.1 REAL CLI DETECTION & DYNAMIC ENGINE INSTALLER
+    // -------------------------------------------------------------
+    case 'tools.detectCLIs': {
+      const cliChecks = [
+        { id: 'hermes', name: 'Nous Hermes 3', bin: hermesBin, installCmd: 'npm install -g hermes-agent || pip install hermes-agent' },
+        { id: 'antigravity', name: 'Antigravity CLI ACP', bin: 'agy', installCmd: 'npm install -g @google/antigravity' },
+        { id: 'claude', name: 'Claude Code CLI', bin: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-code' },
+        { id: 'ollama', name: 'Ollama Local LLM', bin: 'ollama', installCmd: 'curl -fsSL https://ollama.com/install.sh | sh' },
+        { id: 'codex', name: 'OpenAI Codex CLI', bin: 'codex', installCmd: 'npm install -g @openai/codex' },
+        { id: 'node', name: 'Node.js Runtime', bin: 'node', installCmd: 'pkg install nodejs || apt-get install nodejs' },
+        { id: 'python', name: 'Python3 Environment', bin: isWin ? 'python' : 'python3', installCmd: 'pkg install python || apt-get install python3' },
+      ];
+
+      const lookupCmd = isWin ? 'where' : 'which';
+      const results: any[] = [];
+      let pending = cliChecks.length;
+
+      cliChecks.forEach((check) => {
+        exec(`${lookupCmd} ${check.bin}`, (err, stdout) => {
+          const isInstalled = !err && stdout && stdout.trim().length > 0;
+          results.push({
+            id: check.id,
+            name: check.name,
+            bin: check.bin,
+            installed: !!isInstalled,
+            path: isInstalled ? stdout.trim().split('\n')[0].trim() : null,
+            installCmd: check.installCmd,
+          });
+          pending--;
+          if (pending === 0) {
+            ws.send(JSON.stringify({ id, result: results }));
+          }
+        });
       });
       break;
     }

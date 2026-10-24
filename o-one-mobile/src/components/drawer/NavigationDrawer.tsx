@@ -44,6 +44,7 @@ export const NavigationDrawer: React.FC = () => {
     activeServerId,
     selectServer,
     deleteServer,
+    openTerminalWithCommand,
   } = useAppStore();
   const { files: knowledgeFiles } = useKnowledgeStore();
 
@@ -239,6 +240,22 @@ export const NavigationDrawer: React.FC = () => {
                   <Text style={styles.serverTypeText}>{server.typeLabel || 'Local'}</Text>
                 </View>
 
+                {/* Direct Terminal Shortcut Button */}
+                <TouchableOpacity
+                  style={styles.serverTerminalBtn}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    selectServer(server.id);
+                    closeDrawer();
+                    openTerminalWithCommand('', server.type === 'phone' ? 'phone' : 'wsl');
+                  }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={`Open terminal for ${server.name}`}
+                >
+                  <Terminal size={15} color="#38BDF8" strokeWidth={2.2} />
+                </TouchableOpacity>
+
                 {/* Active Server indicator */}
                 {isActive && (
                   <View style={styles.activeCheckPill}>
@@ -276,6 +293,26 @@ export const NavigationDrawer: React.FC = () => {
             </View>
             <View style={styles.knowledgeBadge}>
               <Text style={styles.knowledgeBadgeText}>{knowledgeFiles.length}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Real Environment Terminal & CLI Installer */}
+          <View style={styles.drawerSectionDivider} />
+          <Text style={styles.drawerSectionHeader}>ENVIRONMENT & CLI TOOLS</Text>
+          <TouchableOpacity
+            style={styles.terminalLauncherRow}
+            onPress={() => {
+              closeDrawer();
+              openTerminalWithCommand('', 'phone');
+            }}
+            activeOpacity={0.75}
+          >
+            <View style={styles.terminalIconBox}>
+              <Terminal size={20} color="#10B981" strokeWidth={2.2} />
+            </View>
+            <View style={styles.knowledgeInfoCol}>
+              <Text style={styles.knowledgeTitle}>Environment Terminal</Text>
+              <Text style={styles.knowledgeSub}>Run commands, install CLIs (npm, pip, pkg)</Text>
             </View>
           </TouchableOpacity>
         </ScrollView>
@@ -466,6 +503,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
+  },
+  serverTerminalBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
+  terminalLauncherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.18)',
+  },
+  terminalIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addServerRow: {
     flexDirection: 'row',

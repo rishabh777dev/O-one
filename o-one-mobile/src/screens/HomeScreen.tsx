@@ -40,7 +40,9 @@ export const HomeScreen: React.FC = () => {
     getAgentsForActiveServer,
     getProjectsForActiveServer,
     openProject,
+    addNewProject,
     openAgentById,
+    openTerminalWithCommand,
     activeServerId,
     servers,
   } = useAppStore();
@@ -53,9 +55,9 @@ export const HomeScreen: React.FC = () => {
   const [lookupIdInput, setLookupIdInput] = useState('');
   const [sectionMenuAnchor, setSectionMenuAnchor] = useState<'projects' | 'agents' | null>(null);
 
-  // Accordion toggle states
-  const [projectsOpen, setProjectsOpen] = useState(true);
+  // Accordion toggle states (Agents at top, Projects at bottom)
   const [agentsListOpen, setAgentsListOpen] = useState(true);
+  const [projectsOpen, setProjectsOpen] = useState(true);
 
   // Active workspace metadata
   const currentServer = servers.find((s) => s.id === activeServerId) || servers[0];
@@ -83,7 +85,7 @@ export const HomeScreen: React.FC = () => {
   const handleOpenById = () => {
     const query = lookupIdInput.trim();
     if (!query) {
-      Alert.alert('Empty Input', 'Please enter a Project ID (e.g. prj-o-one) or Agent ID (e.g. agent-1).');
+      Alert.alert('Empty Input', 'Please enter a Project ID (e.g. prj-my-app) or Agent ID (e.g. agent-1).');
       return;
     }
 
@@ -95,7 +97,7 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
-    // Try matching project ID
+    // Try matching existing project ID
     const foundProject = workspaceProjects.find(
       (p) => p.id.toLowerCase() === query.toLowerCase() || p.name.toLowerCase() === query.toLowerCase()
     );
@@ -106,9 +108,33 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
+    // Allow user to register and add this project to the workspace cleanly
     Alert.alert(
-      'Not Found',
-      `No project or agent found matching ID "${query}". You can create a new agent or add a project.`
+      'Register New Project',
+      `No existing project or agent found with ID "${query}". Would you like to register this project in the workspace?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Register Project',
+          onPress: () => {
+            const cleanId = query.startsWith('prj-') ? query : `prj-${query.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+            const cleanName = query.replace(/^prj-/, '');
+            const newProj: ProjectItem = {
+              id: cleanId,
+              name: cleanName,
+              path: `/workspace/${cleanName}`,
+              hasGit: false,
+              branch: 'main',
+              serverId: activeServerId,
+              lastActive: 'Just now',
+            };
+            addNewProject(newProj);
+            openProject(newProj.id, false);
+            setShowOpenByIdModal(false);
+            setLookupIdInput('');
+          },
+        },
+      ]
     );
   };
 
@@ -179,7 +205,7 @@ export const HomeScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Active Workspace Banner */}
+        {/* Active Workspace Banner with Direct Terminal Shortcut */}
         <View style={styles.workspaceBanner}>
           <View
             style={[
@@ -190,118 +216,32 @@ export const HomeScreen: React.FC = () => {
           <Text style={styles.workspaceBannerText}>
             Workspace: <Text style={styles.workspaceBannerBold}>{currentServer?.name || 'Local'}</Text>
           </Text>
-          <TouchableOpacity
-            style={styles.openByIdBadgeBtn}
-            onPress={() => setShowOpenByIdModal(true)}
-            activeOpacity={0.7}
-          >
-            <Hash size={12} color="#38BDF8" strokeWidth={2.4} />
-            <Text style={styles.openByIdBadgeText}>Open by ID</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* ============================================================== */}
-        {/* Accordion 1: Projects (Clean listing with Terminal icon)        */}
-        {/* ============================================================== */}
-        <View style={styles.accordionGroup}>
-          <View style={styles.accordionHeaderRow}>
+          <View style={styles.workspaceBannerActions}>
             <TouchableOpacity
-              style={styles.accordionTitleTouch}
-              onPress={() => setProjectsOpen(!projectsOpen)}
+              style={styles.terminalShellBtn}
+              onPress={() => openTerminalWithCommand('', currentServer?.type === 'phone' ? 'phone' : 'wsl')}
               activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              {projectsOpen ? (
-                <ChevronDown size={14} color="#71717A" />
-              ) : (
-                <ChevronRight size={14} color="#71717A" />
-              )}
-              <Text style={styles.accordionTitle}>Projects</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{filteredProjects.length}</Text>
-              </View>
+              <Terminal size={12} color="#10B981" strokeWidth={2.4} />
+              <Text style={styles.terminalShellBtnText}>Terminal</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.moreBtn}
-              onPress={() => setSectionMenuAnchor('projects')}
+              style={styles.openByIdBadgeBtn}
+              onPress={() => setShowOpenByIdModal(true)}
               activeOpacity={0.7}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
-              <MoreHorizontal size={18} color="#71717A" />
+              <Hash size={12} color="#38BDF8" strokeWidth={2.4} />
+              <Text style={styles.openByIdBadgeText}>Open by ID</Text>
             </TouchableOpacity>
           </View>
-
-          {projectsOpen && (
-            <View style={styles.projectListWrap}>
-              {filteredProjects.length === 0 ? (
-                <TouchableOpacity
-                  style={styles.blankSlateCard}
-                  onPress={() => setShowOpenByIdModal(true)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.blankIconCircle}>
-                    <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
-                  </View>
-                  <Text style={styles.blankTitle}>No Projects in Workspace</Text>
-                  <Text style={styles.blankSub}>Tap to open a project by Project ID or path.</Text>
-                </TouchableOpacity>
-              ) : (
-                filteredProjects.map((project: ProjectItem) => (
-                  <TouchableOpacity
-                    key={project.id}
-                    style={styles.projectRow}
-                    onPress={() => openProject(project.id, false)}
-                    activeOpacity={0.75}
-                  >
-                    {/* Project Folder / Git Icon */}
-                    <View style={styles.projectIconBox}>
-                      {project.hasGit ? (
-                        <FolderGit2 size={20} color="#10B981" strokeWidth={2} />
-                      ) : (
-                        <Folder size={20} color="#3B82F6" strokeWidth={2} />
-                      )}
-                    </View>
-
-                    {/* Project Details */}
-                    <View style={styles.projectInfoCol}>
-                      <View style={styles.projectNameRow}>
-                        <Text style={styles.projectName} numberOfLines={1}>
-                          {project.name}
-                        </Text>
-                        <View style={styles.idChip}>
-                          <Text style={styles.idChipText}>{project.id}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.projectMetaRow}>
-                        {project.branch ? (
-                          <Text style={styles.branchText}> {project.branch}</Text>
-                        ) : null}
-                        <Text style={styles.projectPathText} numberOfLines={1}>
-                          {project.path}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Right Action: Dedicated Interactive Terminal Button */}
-                    <TouchableOpacity
-                      style={styles.terminalActionBtn}
-                      onPress={() => openProject(project.id, true)}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      accessibilityLabel={`Open terminal for ${project.name}`}
-                    >
-                      <Terminal size={17} color="#38BDF8" strokeWidth={2.2} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                ))
-              )}
-            </View>
-          )}
         </View>
 
         {/* ============================================================== */}
-        {/* Accordion 2: Agents (Workspace-isolated agents)                */}
+        {/* Accordion 1 (TOP): Agents (Workspace-isolated agents)           */}
         {/* ============================================================== */}
         <View style={styles.accordionGroup}>
           <View style={styles.accordionHeaderRow}>
@@ -393,6 +333,106 @@ export const HomeScreen: React.FC = () => {
                     </TouchableOpacity>
                   );
                 })
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* ============================================================== */}
+        {/* Accordion 2 (BOTTOM): Projects (Under agents)                  */}
+        {/* ============================================================== */}
+        <View style={styles.accordionGroup}>
+          <View style={styles.accordionHeaderRow}>
+            <TouchableOpacity
+              style={styles.accordionTitleTouch}
+              onPress={() => setProjectsOpen(!projectsOpen)}
+              activeOpacity={0.7}
+            >
+              {projectsOpen ? (
+                <ChevronDown size={14} color="#71717A" />
+              ) : (
+                <ChevronRight size={14} color="#71717A" />
+              )}
+              <Text style={styles.accordionTitle}>Projects</Text>
+              <View style={styles.countBadge}>
+                <Text style={styles.countBadgeText}>{filteredProjects.length}</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.moreBtn}
+              onPress={() => setSectionMenuAnchor('projects')}
+              activeOpacity={0.7}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <MoreHorizontal size={18} color="#71717A" />
+            </TouchableOpacity>
+          </View>
+
+          {projectsOpen && (
+            <View style={styles.projectListWrap}>
+              {filteredProjects.length === 0 ? (
+                <TouchableOpacity
+                  style={styles.blankSlateCard}
+                  onPress={() => setShowOpenByIdModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.blankIconCircle}>
+                    <Plus size={18} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
+                  <Text style={styles.blankTitle}>No Projects in Workspace</Text>
+                  <Text style={styles.blankSub}>Tap to open or register a project by Project ID.</Text>
+                </TouchableOpacity>
+              ) : (
+                filteredProjects.map((project: ProjectItem) => (
+                  <TouchableOpacity
+                    key={project.id}
+                    style={styles.projectRow}
+                    onPress={() => openProject(project.id, false)}
+                    activeOpacity={0.75}
+                  >
+                    {/* Project Folder / Git Icon */}
+                    <View style={styles.projectIconBox}>
+                      {project.hasGit ? (
+                        <FolderGit2 size={20} color="#10B981" strokeWidth={2} />
+                      ) : (
+                        <Folder size={20} color="#3B82F6" strokeWidth={2} />
+                      )}
+                    </View>
+
+                    {/* Project Details */}
+                    <View style={styles.projectInfoCol}>
+                      <View style={styles.projectNameRow}>
+                        <Text style={styles.projectName} numberOfLines={1}>
+                          {project.name}
+                        </Text>
+                        <View style={styles.idChip}>
+                          <Text style={styles.idChipText}>{project.id}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.projectMetaRow}>
+                        {project.branch ? (
+                          <Text style={styles.branchText}> {project.branch}</Text>
+                        ) : null}
+                        <Text style={styles.projectPathText} numberOfLines={1}>
+                          {project.path}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Right Action: Dedicated Interactive Terminal Button */}
+                    <TouchableOpacity
+                      style={styles.terminalActionBtn}
+                      onPress={() => openProject(project.id, true)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      accessibilityLabel={`Open terminal for ${project.name}`}
+                    >
+                      <Terminal size={17} color="#38BDF8" strokeWidth={2.2} />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))
               )}
             </View>
           )}
@@ -586,6 +626,27 @@ const styles = StyleSheet.create({
   workspaceBannerBold: {
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  workspaceBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  terminalShellBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  terminalShellBtnText: {
+    fontSize: 11,
+    color: '#10B981',
+    fontWeight: '700',
   },
   openByIdBadgeBtn: {
     flexDirection: 'row',

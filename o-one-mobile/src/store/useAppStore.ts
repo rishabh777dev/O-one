@@ -32,38 +32,7 @@ const DEFAULT_SERVERS: ServerItem[] = [
   },
 ];
 
-const DEFAULT_PROJECTS: ProjectItem[] = [
-  {
-    id: 'prj-o-one',
-    name: 'O one',
-    path: 'D:\\project\\O one',
-    hasGit: true,
-    branch: 'main',
-    agentId: 'agent-1',
-    serverId: 'server-openbot-local',
-    lastActive: 'Just now',
-  },
-  {
-    id: 'prj-cadence-core',
-    name: 'Cadence Core',
-    path: 'D:\\project\\cadence-core',
-    hasGit: true,
-    branch: 'feat/pg-pool',
-    agentId: 'agent-2',
-    serverId: 'server-openbot-local',
-    lastActive: '2h ago',
-  },
-  {
-    id: 'prj-ondevice-root',
-    name: 'Device Workspace',
-    path: '/data/data/com.termux/files/home',
-    hasGit: false,
-    branch: 'device-local',
-    agentId: 'agent-ondevice-1',
-    serverId: 'server-ondevice-alpine',
-    lastActive: 'Active',
-  },
-];
+const DEFAULT_PROJECTS: ProjectItem[] = [];
 
 interface AppState {
   currentSurface: AppSurface;
@@ -72,6 +41,8 @@ interface AppState {
   isDrawerOpen: boolean;
   isHostExpanded: boolean;
   selectedEngine: string;
+  terminalInitialCommand: string;
+  terminalInitialShell: 'wsl' | 'powershell' | 'phone' | 'cmd';
   agents: Agent[];
   projects: string[];
   projectItems: ProjectItem[];
@@ -85,7 +56,9 @@ interface AppState {
   setActiveAgent: (agent: Agent | null) => void;
   setActiveProject: (project: string) => void;
   openProject: (projectId: string, openTerminal?: boolean) => void;
+  addNewProject: (project: ProjectItem) => void;
   openAgentById: (id: string) => boolean;
+  openTerminalWithCommand: (cmd: string, shell?: 'wsl' | 'powershell' | 'phone' | 'cmd') => void;
   getAgentsForActiveServer: () => Agent[];
   getProjectsForActiveServer: () => ProjectItem[];
   addAgent: (agent: Agent) => void;
@@ -106,13 +79,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Default to 'home' directory
   currentSurface: 'home',
   activeAgent: null,
-  activeProject: 'o-one',
+  activeProject: '',
   isDrawerOpen: false,
   isHostExpanded: false,
   selectedEngine: 'Nous Hermes 3 · Local',
+  terminalInitialCommand: '',
+  terminalInitialShell: 'wsl',
   agents: [],
-  projects: ['o-one', 'cadence-core'],
-  projectItems: DEFAULT_PROJECTS,
+  projects: [],
+  projectItems: [],
   servers: DEFAULT_SERVERS,
   activeServerId: 'server-openbot-local',
   isLoaded: false,
@@ -160,33 +135,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       });
 
-      // 4. Query host for real workspace projects
-      rpcClient.send('fs.listProjects', {}, (res) => {
-        if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-          const projectList: ProjectItem[] = res.result.map((p: any) => ({
-            id: p.id || `prj-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-            name: p.name,
-            path: p.path,
-            hasGit: !!p.hasGit,
-            branch: p.branch || 'main',
-            agentId: p.agentId || `agent-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-            serverId: 'server-openbot-local',
-            lastActive: 'Active now',
-          }));
-          const names = projectList.map((p) => p.name);
-          set({
-            projectItems: [...projectList, DEFAULT_PROJECTS[2]], // include on-device workspace project
-            projects: names,
-            activeProject: names[0] || 'o-one',
-          });
-        }
-      });
+      // 4. Load saved user projects from device storage (strictly user-added, zero hardcoded intermediate items)
+      const localProjects = await AsyncStorage.getItem(STORAGE_KEY_PROJECTS);
+      const userProjects: ProjectItem[] = localProjects ? JSON.parse(localProjects) : [];
 
       set({
         servers: loadedServers,
         activeServerId: loadedServers[0]?.id || 'server-openbot-local',
         agents: loadedAgents,
         activeAgent: loadedAgents.length > 0 ? loadedAgents[0] : null,
+        projectItems: userProjects,
+        projects: userProjects.map((p) => p.name),
+        activeProject: userProjects[0]?.name || '',
         isLoaded: true,
       });
     } catch {
@@ -217,6 +177,28 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       activeProject: projectName,
       currentSurface: openTerminal ? 'terminal' : 'ide',
+      isDrawerOpen: false,
+    });
+  },
+
+  addNewProject: (project: ProjectItem) => {
+    const existing = get().projectItems;
+    if (!existing.some((p) => p.id === project.id || p.path === project.path)) {
+      const updated = [...existing, { ...project, serverId: project.serverId || get().activeServerId }];
+      set({
+        projectItems: updated,
+        projects: updated.map((p) => p.name),
+        activeProject: project.name,
+      });
+      AsyncStorage.setItem(STORAGE_KEY_PROJECTS, JSON.stringify(updated));
+    }
+  },
+
+  openTerminalWithCommand: (cmd: string, shell?: 'wsl' | 'powershell' | 'phone' | 'cmd') => {
+    set({
+      terminalInitialCommand: cmd,
+      terminalInitialShell: shell || 'wsl',
+      currentSurface: 'terminal',
       isDrawerOpen: false,
     });
   },
@@ -316,22 +298,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         rpcClient.send('storage.loadAgents', {}, (res) => {
           if (res.result && Array.isArray(res.result)) {
             set({ agents: res.result });
-          }
-        });
-        rpcClient.send('fs.listProjects', {}, (res) => {
-          if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-            const projectList: ProjectItem[] = res.result.map((p: any) => ({
-              id: p.id || `prj-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-              name: p.name,
-              path: p.path,
-              hasGit: !!p.hasGit,
-              branch: p.branch || 'main',
-              agentId: p.agentId || `agent-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-              serverId,
-              lastActive: 'Active now',
-            }));
-            const names = projectList.map((p) => p.name);
-            set({ projectItems: projectList, projects: names, activeProject: names[0] });
           }
         });
       }, 500);
