@@ -83,7 +83,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeProject: '',
   isDrawerOpen: false,
   isHostExpanded: false,
-  selectedEngine: 'Nous Hermes 3 · Local',
+  selectedEngine: 'Hermes Agent · Local',
   terminalInitialCommand: '',
   terminalInitialShell: 'wsl',
   agents: [],

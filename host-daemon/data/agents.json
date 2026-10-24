@@ -2,11 +2,11 @@
   {
     "id": "cloud-roger",
     "name": "Roger",
-    "role": "Cloud Agent",
-    "systemPrompt": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
-    "instructions": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
+    "role": "Agent",
+    "systemPrompt": "You are Roger, an autonomous AI assistant powered by Hermes Agent and Codex. Help with code, terminal commands, and workflows.",
+    "instructions": "You are Roger, an autonomous AI assistant powered by Hermes Agent and Codex. Help with code, terminal commands, and workflows.",
     "engine": "hermes",
-    "engineLabel": "Nous Hermes 3 · Codex",
+    "engineLabel": "Hermes Agent · Codex",
     "model": "gpt-5.6-luna",
     "workspacePath": "D:\\project\\O one",
     "status": "ready",
@@ -21,7 +21,7 @@
     "avatarColor": "#EA580C",
     "reasoningLevel": "High",
     "notifications": true,
-    "isCloudAgent": true
+    "isCloudAgent": false
   },
   {
     "id": "agent-steve",
@@ -30,7 +30,7 @@
     "systemPrompt": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
     "instructions": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
     "engine": "hermes",
-    "engineLabel": "Nous Hermes 3 · Codex",
+    "engineLabel": "Hermes Agent · Codex",
     "model": "gpt-5.6-luna",
     "workspacePath": "D:\\project\\O one",
     "status": "ready",

@@ -14,6 +14,7 @@ import { colors } from './src/theme/colors';
 import { useAppStore } from './src/store/useAppStore';
 import { useHostStore } from './src/store/useHostStore';
 import { useDistroStore } from './src/store/useDistroStore';
+import { useAgentStore } from './src/store/useAgentStore';
 import { rpcClient, getDefaultHostUrl } from './src/services/rpcClient';
 import { Header } from './src/components/common/Header';
 import { InputBar } from './src/components/common/InputBar';
@@ -35,6 +36,7 @@ export default function App() {
     console.log(`[O1 Init] Dynamically discovered host: ${autoHost}`);
     rpcClient.setHost(autoHost);
     initStore();
+    useAgentStore.getState().initMessages();
     useDistroStore.getState().initDistro();
     const unsub = rpcClient.onTelemetry((data) => {
       useHostStore.getState().updateTelemetry({

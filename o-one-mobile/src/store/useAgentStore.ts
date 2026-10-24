@@ -35,7 +35,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   initMessages: async () => {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEY_MESSAGES);
+      let data = await AsyncStorage.getItem(STORAGE_KEY_MESSAGES);
+      if (!data) {
+        data = await AsyncStorage.getItem('@o1_chat_messages');
+      }
       if (data) {
         const parsed = JSON.parse(data);
         const cleaned: Record<string, ChatMessage[]> = {};
@@ -54,6 +57,27 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       const titlesData = await AsyncStorage.getItem(STORAGE_KEY_TITLES);
       if (titlesData) {
         set({ sessionTitles: JSON.parse(titlesData) });
+      }
+
+      // If an agent has an active session ID but local messages array is empty, restore messages from daemon
+      const activeSessions = sessData ? JSON.parse(sessData) : {};
+      const currentMessages = get().messages;
+      for (const [agentId, sessId] of Object.entries(activeSessions)) {
+        if (sessId && (!currentMessages[agentId] || currentMessages[agentId].length === 0)) {
+          rpcClient.send('hermes.sessions.messages', { sessionId: sessId }, (res: RPCResponse) => {
+            if (res.type === 'result' && Array.isArray(res.messages) && res.messages.length > 0) {
+              const mapped: ChatMessage[] = res.messages.map((m: any) => ({
+                id: m.id || `msg-${Date.now()}-${Math.random()}`,
+                sender: m.sender || 'agent',
+                content: sanitizeChatMessage(m.content),
+                timestamp: m.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              }));
+              const next = { ...get().messages, [agentId]: mapped };
+              set({ messages: next });
+              AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(next));
+            }
+          });
+        }
       }
     } catch {}
   },
@@ -120,13 +144,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     };
 
     const updatedWithUser = [...currentList, userMsg, initialAgentMsg];
-
-    set({
-      messages: {
-        ...get().messages,
-        [agentId]: updatedWithUser,
-      },
-    });
+    const nextMessages = {
+      ...get().messages,
+      [agentId]: updatedWithUser,
+    };
+    set({ messages: nextMessages });
+    AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(nextMessages));
 
     let accumulatedText = '';
 
@@ -251,17 +274,18 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             nextTitles[agentId] = res.sessionTitle;
           }
 
+          const finalMessages = {
+            ...get().messages,
+            [agentId]: updatedList,
+          };
           set({
-            messages: {
-              ...get().messages,
-              [agentId]: updatedList,
-            },
+            messages: finalMessages,
             sessions: nextSessions,
             sessionTitles: nextTitles,
           });
           AsyncStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(nextSessions));
           AsyncStorage.setItem(STORAGE_KEY_TITLES, JSON.stringify(nextTitles));
-          AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(get().messages));
+          AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(finalMessages));
         } else if (res.type === 'process_exit') {
           const currentMsg = (get().messages[agentId] || []).find((m) => m.id === agentMsgId);
           if (currentMsg && currentMsg.isThinking && !currentMsg.content) {
@@ -269,13 +293,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             const updatedList = (get().messages[agentId] || []).map((m) =>
               m.id === agentMsgId ? { ...m, content: fallbackText, isThinking: false } : m
             );
-            set({
-              messages: {
-                ...get().messages,
-                [agentId]: updatedList,
-              },
-            });
-            AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(get().messages));
+            const finalMessages = {
+              ...get().messages,
+              [agentId]: updatedList,
+            };
+            set({ messages: finalMessages });
+            AsyncStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(finalMessages));
           }
         }
       }

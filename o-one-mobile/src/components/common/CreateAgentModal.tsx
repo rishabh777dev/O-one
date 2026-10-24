@@ -35,7 +35,7 @@ const COLOR_PALETTE = [
 const ENGINE_OPTIONS: { id: AgentEngine; label: string; model: string; badge: string }[] = [
   {
     id: 'hermes',
-    label: 'Nous Hermes 3 (Codex / Local)',
+    label: 'Hermes Agent (Codex / Local)',
     model: 'gpt-5.6-luna',
     badge: 'Codex / Local',
   },
@@ -129,7 +129,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ visible, onC
       systemPrompt: instructions.trim(),
       instructions: instructions.trim(),
       engine: selectedEngine,
-      engineLabel: engineCfg?.label || 'Nous Hermes 3',
+      engineLabel: engineCfg?.label || 'Hermes Agent',
       model: selectedModel || engineCfg?.model || 'gpt-5.6-luna',
       workspacePath: 'D:\\project\\O one',
       status: 'ready',

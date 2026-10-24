@@ -473,7 +473,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     // -------------------------------------------------------------
     case 'tools.detectCLIs': {
       const cliChecks = [
-        { id: 'hermes', name: 'Nous Hermes 3', bin: hermesBin, installCmd: 'npm install -g hermes-agent || pip install hermes-agent' },
+        { id: 'hermes', name: 'Hermes Agent', bin: hermesBin, installCmd: 'npm install -g hermes-agent || pip install hermes-agent' },
         { id: 'antigravity', name: 'Antigravity CLI ACP', bin: 'agy', installCmd: 'npm install -g @google/antigravity' },
         { id: 'claude', name: 'Claude Code CLI', bin: 'claude', installCmd: 'npm install -g @anthropic-ai/claude-code' },
         { id: 'ollama', name: 'Ollama Local LLM', bin: 'ollama', installCmd: 'curl -fsSL https://ollama.com/install.sh | sh' },

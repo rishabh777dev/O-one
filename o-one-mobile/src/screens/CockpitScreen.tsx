@@ -336,65 +336,22 @@ export const CockpitScreen: React.FC = () => {
                 shapeIndex={activeAgent.avatarShape ?? 0}
                 color={agentColor}
                 size={76}
-                showGlow={true}
+                showGlow={false}
               />
             </View>
 
             <Text style={styles.emptyTitle}>{activeAgent.name}</Text>
-            <Text style={styles.emptyRole}>{activeAgent.role || 'Autonomous Engineer'}</Text>
+            <Text style={styles.emptyRole}>
+              {activeAgent.role === 'Cloud Agent' ? 'Agent' : (activeAgent.role || 'Agent')}
+            </Text>
 
             <View style={styles.engineBadge}>
               <View style={[styles.engineDot, { backgroundColor: agentColor }]} />
-              <Text style={styles.engineText}>{activeAgent.engineLabel || activeAgent.model}</Text>
-            </View>
-
-            {/* Quick Prompt Starters */}
-            <View style={styles.startersBox}>
-              <Text style={styles.startersHeader}>Suggested Instructions</Text>
-
-              <TouchableOpacity
-                style={styles.starterPill}
-                onPress={() =>
-                  handleStarterPrompt('Check WSL2 Ubuntu Linux kernel, RAM, and active processes')
-                }
-                activeOpacity={0.7}
-              >
-                <Activity size={14} color={colors.accentEmerald} />
-                <Text style={styles.starterText}>Check Linux kernel telemetry & RAM</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.starterPill}
-                onPress={() =>
-                  handleStarterPrompt('Audit git status and review recent commits in workspace')
-                }
-                activeOpacity={0.7}
-              >
-                <GitCommit size={14} color="#60A5FA" />
-                <Text style={styles.starterText}>Audit git status & workspace</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.starterPill}
-                onPress={() =>
-                  handleStarterPrompt('Run automated test suite and check for code anomalies')
-                }
-                activeOpacity={0.7}
-              >
-                <Terminal size={14} color={colors.hermesOrange} />
-                <Text style={styles.starterText}>Run automated test suite</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.starterPill}
-                onPress={() =>
-                  handleStarterPrompt('Query MCP Hub tools and report active catalog connectors')
-                }
-                activeOpacity={0.7}
-              >
-                <ShieldAlert size={14} color={colors.accentRose} />
-                <Text style={styles.starterText}>Inspect active MCP tools & connectors</Text>
-              </TouchableOpacity>
+              <Text style={styles.engineText}>
+                {(activeAgent.engineLabel || activeAgent.model || 'Hermes Agent')
+                  .replace(/Nous Hermes 3/g, 'Hermes Agent')
+                  .replace(/Hermes 3/g, 'Hermes Agent')}
+              </Text>
             </View>
           </View>
         ) : null}
