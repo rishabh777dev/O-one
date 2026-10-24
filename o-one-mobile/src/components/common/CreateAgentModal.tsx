@@ -347,7 +347,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ visible, onC
                 }}
                 activeOpacity={0.7}
               >
-                <Terminal size={14} color="#10B981" strokeWidth={2.4} />
+                <Terminal size={14} color="#D1D1D6" strokeWidth={2} />
                 <Text style={styles.installCliPromptText}>
                   Install or detect CLI engines via Terminal (Claude, Ollama, Hermes)...
                 </Text>
@@ -557,17 +557,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    backgroundColor: '#1E1E24',
     borderRadius: 10,
     padding: 10,
     marginTop: 8,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   installCliPromptText: {
     fontSize: 11.5,
-    color: '#10B981',
-    fontWeight: '600',
+    color: '#D1D1D6',
+    fontWeight: '500',
     flex: 1,
   },
 });

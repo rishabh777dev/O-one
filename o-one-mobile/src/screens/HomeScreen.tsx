@@ -219,23 +219,21 @@ export const HomeScreen: React.FC = () => {
 
           <View style={styles.workspaceBannerActions}>
             <TouchableOpacity
-              style={styles.terminalShellBtn}
+              style={styles.workspaceActionBtn}
               onPress={() => openTerminalWithCommand('', currentServer?.type === 'phone' ? 'phone' : 'wsl')}
               activeOpacity={0.7}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Terminal size={12} color="#10B981" strokeWidth={2.4} />
-              <Text style={styles.terminalShellBtnText}>Terminal</Text>
+              <Terminal size={15} color="#D1D1D6" strokeWidth={2} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.openByIdBadgeBtn}
+              style={styles.workspaceActionBtn}
               onPress={() => setShowOpenByIdModal(true)}
               activeOpacity={0.7}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Hash size={12} color="#38BDF8" strokeWidth={2.4} />
-              <Text style={styles.openByIdBadgeText}>Open by ID</Text>
+              <Hash size={15} color="#D1D1D6" strokeWidth={2} />
             </TouchableOpacity>
           </View>
         </View>
@@ -632,35 +630,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  terminalShellBtn: {
-    flexDirection: 'row',
+  workspaceActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#202023',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
-  },
-  terminalShellBtnText: {
-    fontSize: 11,
-    color: '#10B981',
-    fontWeight: '700',
-  },
-  openByIdBadgeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  openByIdBadgeText: {
-    fontSize: 11,
-    color: '#38BDF8',
-    fontWeight: '700',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   accordionGroup: {
     marginBottom: 20,

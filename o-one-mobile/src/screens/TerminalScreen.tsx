@@ -271,11 +271,11 @@ export const TerminalScreen: React.FC = () => {
   const getShellSubtitle = () => {
     switch (shellType) {
       case 'phone':
-        return '📱 Phone Linux (Android Termux)';
+        return 'Phone Linux (Termux)';
       case 'wsl':
-        return '🐧 WSL2 Ubuntu 24.04 (Linux Kernel)';
+        return 'WSL2 Ubuntu 24.04';
       case 'powershell':
-        return '💻 Windows PowerShell';
+        return 'Windows PowerShell';
       default:
         return 'Shell Active';
     }
@@ -291,25 +291,22 @@ export const TerminalScreen: React.FC = () => {
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <ArrowLeft size={18} color="#FFFFFF" strokeWidth={2.4} />
+          <ArrowLeft size={18} color="#FFFFFF" strokeWidth={2.2} />
         </TouchableOpacity>
 
         <View style={styles.headerTitleBox}>
-          <Text style={styles.headerTitleText}>Terminal Console</Text>
-          <View style={styles.headerSubtitleRow}>
-            <View style={styles.livePulseDot} />
-            <Text style={styles.headerSubText}>{getShellSubtitle()}</Text>
-          </View>
+          <Text style={styles.headerTitleText}>Terminal</Text>
+          <Text style={styles.headerSubText}>{getShellSubtitle()}</Text>
         </View>
 
         <View style={styles.headerRightActions}>
           <TouchableOpacity
-            style={styles.cliGuideBtn}
+            style={styles.headerBtn}
             onPress={() => setIsGuideModalOpen(true)}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Sparkles size={13} color="#F59E0B" strokeWidth={2.2} />
-            <Text style={styles.cliGuideBtnText}>CLI Guide</Text>
+            <Sparkles size={16} color="#FFFFFF" strokeWidth={2} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -318,7 +315,7 @@ export const TerminalScreen: React.FC = () => {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Trash2 size={16} color={colors.textMuted} />
+            <Trash2 size={16} color="#FFFFFF" strokeWidth={2} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -327,7 +324,7 @@ export const TerminalScreen: React.FC = () => {
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Layers size={18} color="#FFFFFF" strokeWidth={2} />
+            <Layers size={17} color="#FFFFFF" strokeWidth={2} />
           </TouchableOpacity>
         </View>
       </View>
@@ -341,7 +338,7 @@ export const TerminalScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.shellTabText, shellType === 'phone' && styles.shellTabTextActive]}>
-              📱 Phone (Termux)
+              Phone (Termux)
             </Text>
           </TouchableOpacity>
 
@@ -351,7 +348,7 @@ export const TerminalScreen: React.FC = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.shellTabText, shellType === 'wsl' && styles.shellTabTextActive]}>
-              🐧 Linux (WSL2)
+              Linux (WSL2)
             </Text>
           </TouchableOpacity>
 
@@ -366,7 +363,7 @@ export const TerminalScreen: React.FC = () => {
                 shellType === 'powershell' && styles.shellTabTextActive,
               ]}
             >
-              💻 PowerShell
+              PowerShell
             </Text>
           </TouchableOpacity>
         </View>
@@ -470,12 +467,12 @@ export const TerminalScreen: React.FC = () => {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.quickChip, styles.quickChipHighlight]}
+            style={styles.quickChip}
             onPress={() => setIsGuideModalOpen(true)}
             activeOpacity={0.7}
           >
-            <Sparkles size={11} color="#F59E0B" />
-            <Text style={[styles.quickChipText, { color: '#F59E0B' }]}>CLI Guide...</Text>
+            <Sparkles size={11} color="#A1A1AA" />
+            <Text style={styles.quickChipText}>Guide</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -531,7 +528,7 @@ export const TerminalScreen: React.FC = () => {
             <View style={styles.modalHeader}>
               <View>
                 <View style={styles.modalTitleRow}>
-                  <Sparkles size={18} color="#F59E0B" />
+                  <Sparkles size={18} color="#FFFFFF" />
                   <Text style={styles.modalTitle}>CLI Engines & Packages</Text>
                 </View>
                 <Text style={styles.modalSubtitle}>
@@ -551,7 +548,7 @@ export const TerminalScreen: React.FC = () => {
             <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollBody}>
               {/* Architecture Explanation Card */}
               <View style={styles.architectureCard}>
-                <Smartphone size={18} color={colors.accentEmerald} />
+                <Smartphone size={18} color="#D1D1D6" />
                 <View style={styles.architectureTextBox}>
                   <Text style={styles.architectureTitle}>How Phone Linux Works</Text>
                   <Text style={styles.architectureDesc}>
@@ -673,43 +670,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  headerSubtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  livePulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.accentEmerald,
-  },
   headerSubText: {
-    fontSize: 10.5,
-    color: colors.textSecondary,
+    fontSize: 11,
+    color: colors.textMuted,
     fontWeight: '500',
+    marginTop: 2,
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  cliGuideBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-  },
-  cliGuideBtnText: {
-    fontSize: 11,
-    color: '#F59E0B',
-    fontWeight: '600',
   },
   shellBar: {
     height: 42,
@@ -852,8 +822,8 @@ const styles = StyleSheet.create({
   promptBadgeText: {
     fontSize: 11,
     fontFamily: 'monospace',
-    color: colors.accentEmerald,
-    fontWeight: '700',
+    color: '#D1D1D6',
+    fontWeight: '600',
   },
   commandTextInput: {
     flex: 1,
@@ -935,9 +905,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
     borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: '#16161C',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   architectureTextBox: {
     flex: 1,
@@ -945,7 +915,7 @@ const styles = StyleSheet.create({
   architectureTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.accentEmerald,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   architectureDesc: {
@@ -1008,7 +978,7 @@ const styles = StyleSheet.create({
   toolCmdText: {
     fontSize: 11,
     fontFamily: 'monospace',
-    color: '#38BDF8',
+    color: '#D1D1D6',
   },
   toolRunBtn: {
     flexDirection: 'row',
