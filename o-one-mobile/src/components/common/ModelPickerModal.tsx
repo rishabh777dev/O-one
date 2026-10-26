@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Brain,
+  RotateCw,
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { rpcClient } from '../../services/rpcClient';
@@ -63,6 +64,7 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
   const { updateAgent } = useAppStore();
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [groups, setGroups] = useState<ProviderGroup[]>([]);
   const [activeModel, setActiveModel] = useState<string>('');
   const [activeProvider, setActiveProvider] = useState<string>('');
@@ -77,10 +79,16 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
     }));
   };
 
-  const fetchModels = () => {
-    setLoading(true);
-    rpcClient.send('models.list', {}, (res) => {
+  const fetchModels = (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    rpcClient.send('models.list', { refresh: isManualRefresh }, (res) => {
       setLoading(false);
+      setIsRefreshing(false);
       if (res.result && Array.isArray(res.result)) {
         const list = res.result.map((g: any) => ({
           ...g,
@@ -102,18 +110,20 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
         if (res.activeModel) setActiveModel(res.activeModel);
         if (res.activeProvider) setActiveProvider(res.activeProvider);
 
-        const initialCollapsed: Record<string, boolean> = {};
-        const curModel = agent?.model || res.activeModel;
-        list.forEach((g: any) => {
-          const hasSelected = g.models?.some((m: any) => m.id === curModel);
-          const isPriority =
-            g.provider === 'OpenAI' ||
-            g.provider.includes('OpenCode') ||
-            hasSelected ||
-            g.isCurrent;
-          initialCollapsed[g.slug || g.provider] = !isPriority;
-        });
-        setCollapsedGroups(initialCollapsed);
+        if (!isManualRefresh) {
+          const initialCollapsed: Record<string, boolean> = {};
+          const curModel = agent?.model || res.activeModel;
+          list.forEach((g: any) => {
+            const hasSelected = g.models?.some((m: any) => m.id === curModel);
+            const isPriority =
+              g.provider === 'OpenAI' ||
+              g.provider.includes('OpenCode') ||
+              hasSelected ||
+              g.isCurrent;
+            initialCollapsed[g.slug || g.provider] = !isPriority;
+          });
+          setCollapsedGroups(initialCollapsed);
+        }
       }
     });
   };
@@ -323,9 +333,21 @@ export const ModelPickerModal: React.FC<ModelPickerModalProps> = ({
           </TouchableOpacity>
           <View style={styles.headerTitleCol}>
             <Text style={styles.headerTitle}>Inference Models</Text>
-            <Text style={styles.headerSub}>Live models streamed from Hermes gateway</Text>
+            <Text style={styles.headerSub}>Dynamic models streamed from host engines</Text>
           </View>
-          <View style={{ width: 36 }} />
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={() => fetchModels(true)}
+            activeOpacity={0.7}
+            disabled={isRefreshing || loading}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color="#38BDF8" />
+            ) : (
+              <RotateCw size={17} color="#38BDF8" />
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Search Input Box */}
@@ -430,6 +452,16 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#71717A',
     marginTop: 2,
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1C1C1E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#2E2E38',
   },
   searchWrap: {
     flexDirection: 'row',

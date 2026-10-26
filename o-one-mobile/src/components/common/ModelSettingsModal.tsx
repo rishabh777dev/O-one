@@ -6,9 +6,10 @@ import {
   Modal,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Check, Cpu, Zap, Brain, ChevronDown, ChevronRight } from 'lucide-react-native';
+import { X, Check, Cpu, Zap, Brain, ChevronDown, ChevronRight, RotateCw } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { Agent, AgentEngine } from '../../types';
 import { rpcClient } from '../../services/rpcClient';
@@ -160,6 +161,7 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const [providerGroups, setProviderGroups] = useState(PROVIDER_MODELS);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedModel, setSelectedModel] = useState(agent?.model || 'gpt-5.6-luna');
   const [reasoningLevel, setReasoningLevel] = useState<'High' | 'Med' | 'Low'>(
     agent?.reasoningLevel || 'High'
@@ -180,31 +182,31 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
     }
   }, [agent]);
 
-  useEffect(() => {
-    if (visible) {
-      rpcClient.send('models.list', {}, (res) => {
-        if (res.result && Array.isArray(res.result) && res.result.length > 0) {
-          const list = res.result.map((g: any) => ({
-            ...g,
-            cleanProvider: formatProviderName(g.provider, g.slug),
-          }));
+  const loadModels = (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true);
+    rpcClient.send('models.list', { refresh: isManualRefresh }, (res) => {
+      if (isManualRefresh) setIsRefreshing(false);
+      if (res.result && Array.isArray(res.result) && res.result.length > 0) {
+        const list = res.result.map((g: any) => ({
+          ...g,
+          cleanProvider: formatProviderName(g.provider, g.slug),
+        }));
 
-          // Sort within category: OpenAI first, then OpenCode, then others
-          list.sort((a: any, b: any) => {
-            const getRank = (item: any) => {
-              if (item.cleanProvider === 'OpenAI') return 0;
-              if (item.cleanProvider === 'OpenCode' || item.cleanProvider === 'OpenCode (Free)') return 1;
-              if (item.cleanProvider === 'OpenCode CLI') return 2;
-              if (item.cleanProvider.includes('Antigravity')) return 3;
-              if (item.isCurrent) return 4;
-              return 5;
-            };
-            return getRank(a) - getRank(b);
-          });
+        list.sort((a: any, b: any) => {
+          const getRank = (item: any) => {
+            if (item.cleanProvider === 'OpenAI') return 0;
+            if (item.cleanProvider === 'OpenCode' || item.cleanProvider === 'OpenCode (Free)') return 1;
+            if (item.cleanProvider === 'OpenCode CLI') return 2;
+            if (item.cleanProvider.includes('Antigravity')) return 3;
+            if (item.isCurrent) return 4;
+            return 5;
+          };
+          return getRank(a) - getRank(b);
+        });
 
-          setProviderGroups(list);
+        setProviderGroups(list);
 
-          // By default expand OpenAI, OpenCode, and any provider with selectedModel
+        if (!isManualRefresh) {
           const initialCollapsed: Record<string, boolean> = {};
           list.forEach((g: any) => {
             const hasSelected = g.models?.some((m: any) => m.id === selectedModel);
@@ -218,7 +220,13 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
           });
           setCollapsedGroups(initialCollapsed);
         }
-      });
+      }
+    });
+  };
+
+  useEffect(() => {
+    if (visible) {
+      loadModels(false);
     }
   }, [visible, selectedModel]);
 
@@ -359,7 +367,22 @@ export const ModelSettingsModal: React.FC<ModelSettingsModalProps> = ({
           >
             <X size={18} color="#FFFFFF" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Model Settings</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle}>Model Settings</Text>
+            <TouchableOpacity
+              style={styles.refreshIconBtn}
+              onPress={() => loadModels(true)}
+              disabled={isRefreshing}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {isRefreshing ? (
+                <ActivityIndicator size="small" color={colors.hermesOrange} />
+              ) : (
+                <RotateCw size={14} color="#A1A1AA" />
+              )}
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity
             style={[styles.circleBtn, styles.checkBtn]}
             onPress={handleSave}
@@ -464,6 +487,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshIconBtn: {
+    padding: 5,
+    borderRadius: 6,
+    backgroundColor: '#1E1E24',
+    borderWidth: 1,
+    borderColor: '#2A2A34',
   },
   circleBtn: {
     width: 36,
