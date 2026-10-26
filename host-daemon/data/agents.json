@@ -2,9 +2,9 @@
   {
     "id": "cloud-roger",
     "name": "Roger",
-    "role": "Agent",
-    "systemPrompt": "You are Roger, an autonomous AI assistant powered directly by OpenCode CLI. Help with code, terminal commands, and workflows.",
-    "instructions": "You are Roger, an autonomous AI assistant powered directly by OpenCode CLI. Help with code, terminal commands, and workflows.",
+    "role": "Cloud Agent",
+    "systemPrompt": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
+    "instructions": "You are Roger, an autonomous AI assistant powered by Hermes 3 and Codex. Help with code, terminal commands, and workflows.",
     "engine": "opencode",
     "engineLabel": "OpenCode CLI",
     "model": "opencode/mimo-v2.6-flash-free",
@@ -21,7 +21,7 @@
     "avatarColor": "#EA580C",
     "reasoningLevel": "High",
     "notifications": true,
-    "isCloudAgent": false
+    "isCloudAgent": true
   },
   {
     "id": "agent-steve",
@@ -30,7 +30,7 @@
     "systemPrompt": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
     "instructions": "General-purpose assistant. Autonomous software engineer with terminal and tool execution.",
     "engine": "hermes",
-    "engineLabel": "Hermes Agent · Codex",
+    "engineLabel": "Nous Hermes 3 · Codex",
     "model": "gpt-5.6-luna",
     "workspacePath": "D:\\project\\O one",
     "status": "ready",
@@ -45,5 +45,29 @@
     "reasoningLevel": "High",
     "notifications": true,
     "isCloudAgent": false
+  },
+  {
+    "id": "agent-1792871413236",
+    "name": "Friday",
+    "role": "Software Engineer",
+    "systemPrompt": "You are an autonomous AI software engineer. Analyze code, run terminal commands, execute git diffs, and write clean production code.",
+    "instructions": "You are an autonomous AI software engineer. Analyze code, run terminal commands, execute git diffs, and write clean production code.",
+    "engine": "hermes",
+    "engineLabel": "OpenAI",
+    "model": "gpt-5.6-luna",
+    "workspacePath": "D:\\project\\O one",
+    "status": "ready",
+    "capabilities": [
+      "Terminal",
+      "Code Diff",
+      "MCP Tools"
+    ],
+    "mcpServers": [],
+    "createdAt": "2026-10-24T19:50:13.238Z",
+    "avatarShape": 0,
+    "avatarColor": "#2563EB",
+    "reasoningLevel": "High",
+    "notifications": true,
+    "serverId": "srv-local-1792645099127"
   }
 ]

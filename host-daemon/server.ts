@@ -9,7 +9,29 @@ import sqlite from 'node:sqlite';
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8443;
 const wss = new WebSocketServer({ port: PORT });
 
-console.log(`[O1 Host Daemon] Listening on ws://0.0.0.0:${PORT}...`);
+function getLocalIps(): string[] {
+  const nets = os.networkInterfaces();
+  const results: string[] = [];
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === 'IPv4' && !net.internal && !net.address.startsWith('169.254')) {
+        results.push(net.address);
+      }
+    }
+  }
+  return results;
+}
+
+const localIps = getLocalIps();
+console.log('========================================================================');
+console.log('                      O1 HOST DAEMON ACTIVE                            ');
+console.log('========================================================================');
+console.log(` > WebSocket Port: ${PORT}`);
+console.log(` > Localhost:      ws://127.0.0.1:${PORT}`);
+localIps.forEach((ip) => {
+  console.log(` > LAN Endpoint:   ws://${ip}:${PORT}  <-- Enter this in O1 Mobile`);
+});
+console.log('========================================================================\n');
 
 const isWin = os.platform() === 'win32';
 const hermesBin = isWin ? 'hermes.cmd' : 'hermes';
@@ -90,8 +112,8 @@ initHermesRuntime();
 let activeHermesModel = 'gpt-5.6-luna';
 let activeHermesProvider = 'ChatGPT or Codex Subscription';
 
-function updateHermesMetadata() {
-  exec(`${hermesBin} status`, (err, stdout) => {
+function updateHermesMetadata(cb?: () => void) {
+  exec(`${hermesBin} status`, { timeout: 6000 }, (err, stdout) => {
     if (!err && stdout) {
       const modelMatch = stdout.match(/Model:\s+([^\r\n]+)/);
       if (modelMatch) activeHermesModel = modelMatch[1].trim();
@@ -100,6 +122,7 @@ function updateHermesMetadata() {
       if (providerMatch) activeHermesProvider = providerMatch[1].trim();
     }
     console.log(`[O1 Host Daemon] Hermes Active: ${activeHermesModel} (${activeHermesProvider})`);
+    if (cb) cb();
   });
 }
 updateHermesMetadata();
@@ -168,43 +191,64 @@ let dynamicAgyModels: any[] = [
   { id: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)', desc: 'Open-weight frontier coding model (Antigravity CLI)' },
 ];
 
-function refreshCliModels() {
-  exec(isWin ? 'opencode.cmd models' : 'opencode models', (err, stdout) => {
-    if (!err && stdout) {
-      const lines = stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
-      if (lines.length > 0) {
-        dynamicOpencodeModels = lines.map((mId) => {
-          const shortName = mId.replace('opencode/', '');
-          const formatted = shortName
-            .split('-')
-            .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-            .join(' ');
-          return {
-            id: mId,
-            name: formatted,
-            desc: `Live model streamed directly from OpenCode CLI (${mId})`,
-          };
+function refreshCliModels(): Promise<{ opencode: any[]; agy: any[]; hermesModel: string; hermesProvider: string }> {
+  return new Promise((resolve) => {
+    let pending = 2;
+    const done = () => {
+      pending--;
+      if (pending <= 0) {
+        resolve({
+          opencode: dynamicOpencodeModels,
+          agy: dynamicAgyModels,
+          hermesModel: activeHermesModel,
+          hermesProvider: activeHermesProvider,
         });
-        console.log(`[O1 Host Daemon] Loaded ${dynamicOpencodeModels.length} dynamic models from OpenCode CLI`);
       }
-    }
-  });
+    };
 
-  exec(isWin ? 'agy.EXE models' : 'agy models', (err, stdout) => {
-    if (!err && stdout) {
-      const lines = stdout.trim().split('\n').filter((l) => l.includes('\t'));
-      if (lines.length > 0) {
-        dynamicAgyModels = lines.map((l) => {
-          const [mId, mName] = l.split('\t');
-          return {
-            id: mId.trim(),
-            name: (mName || mId).trim(),
-            desc: `Live model streamed directly from Antigravity CLI (${mId.trim()})`,
-          };
-        });
-        console.log(`[O1 Host Daemon] Loaded ${dynamicAgyModels.length} dynamic models from Antigravity CLI`);
+    exec(isWin ? 'opencode.cmd models' : 'opencode models', { timeout: 12000 }, (err, stdout) => {
+      if (!err && stdout) {
+        const lines = stdout.trim().split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.length > 0) {
+          dynamicOpencodeModels = lines.map((mId) => {
+            const shortName = mId.replace('opencode/', '');
+            const formatted = shortName
+              .split('-')
+              .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+              .join(' ');
+            return {
+              id: mId,
+              name: formatted,
+              desc: `Live model streamed directly from OpenCode CLI (${mId})`,
+            };
+          });
+          console.log(`[O1 Host Daemon] Loaded ${dynamicOpencodeModels.length} dynamic models from OpenCode CLI`);
+        }
+      } else if (err) {
+        console.warn('[O1 Host Daemon] OpenCode models check notice:', err.message);
       }
-    }
+      done();
+    });
+
+    exec(isWin ? 'agy.EXE models' : 'agy models', { timeout: 12000 }, (err, stdout) => {
+      if (!err && stdout) {
+        const lines = stdout.trim().split('\n').filter((l) => l.includes('\t'));
+        if (lines.length > 0) {
+          dynamicAgyModels = lines.map((l) => {
+            const [mId, mName] = l.split('\t');
+            return {
+              id: mId.trim(),
+              name: (mName || mId).trim(),
+              desc: `Live model streamed directly from Antigravity CLI (${mId.trim()})`,
+            };
+          });
+          console.log(`[O1 Host Daemon] Loaded ${dynamicAgyModels.length} dynamic models from Antigravity CLI`);
+        }
+      } else if (err) {
+        console.warn('[O1 Host Daemon] Antigravity models check notice:', err.message);
+      }
+      done();
+    });
   });
 }
 
@@ -238,6 +282,27 @@ function pushTelemetry(ws: WebSocket) {
   );
 }
 
+function formatConversationContext(history: { role: string; content: string }[], maxChars = 3200): string {
+  if (!history || !Array.isArray(history) || history.length === 0) return '';
+  const lines: string[] = [];
+  let charCount = 0;
+  // Walk backwards from most recent messages to fit under maxChars limit
+  for (let i = history.length - 1; i >= 0; i--) {
+    const item = history[i];
+    if (!item || !item.content) continue;
+    const cleanContent = item.content
+      .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+      .replace(/^[□■\?]?\[\d+m/gm, '')
+      .trim();
+    if (!cleanContent) continue;
+    const line = `${item.role === 'user' ? 'User' : 'Roger'}: ${cleanContent}`;
+    if (charCount + line.length > maxChars) break;
+    lines.unshift(line);
+    charCount += line.length;
+  }
+  return lines.join('\n');
+}
+
 function handleRPC(ws: WebSocket, req: RPCRequest) {
   const { id, method, params = {} } = req;
 
@@ -267,11 +332,18 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       }
 
       let promptText = query;
+      // If no Hermes session ID, inject App Brain history so Hermes has full context
+      if (!sessionId && Array.isArray(params.history) && params.history.length > 0) {
+        const contextBlock = formatConversationContext(params.history);
+        if (contextBlock) {
+          promptText = `[Conversation History]\n${contextBlock}\n\n[Current User Message]\n${query}`;
+        }
+      }
       if (systemPrompt && systemPrompt.trim() && !sessionId) {
-        promptText = `[System Instructions: ${systemPrompt.trim()}]\n\nUser: ${query}`;
+        promptText = `[System Instructions: ${systemPrompt.trim()}]\n\n${promptText}`;
       }
 
-      const hermesArgs = [...hermesRuntimePrefixArgs, 'chat', '-q', promptText, '--format', 'stream-json', '-Q'];
+      const hermesArgs = [...hermesRuntimePrefixArgs, 'chat', '-q', promptText, '--format', 'stream-json', '-Q', '--yolo'];
       if (sessionId) {
         hermesArgs.push('--resume', sessionId);
       }
@@ -284,6 +356,7 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
 
       console.log(`[O1 Host Daemon] Spawning: ${hermesRuntimeBin} ${hermesArgs.slice(hermesRuntimePrefixArgs.length).join(' ')}`);
       const child = spawn(hermesRuntimeBin, hermesArgs, { cwd, shell: hermesUseShell });
+      child.stdin.end();
 
       const rl = readline.createInterface({ input: child.stdout });
 
@@ -434,18 +507,55 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     // 2. ANTIGRAVITY ENGINE RUNNER
     // -------------------------------------------------------------
     case 'antigravity.run': {
-      const prompt = params.prompt || '';
+      const prompt = params.prompt || params.query || '';
       const cwd = params.cwd || process.cwd();
+      const model = params.model;
+      const history = params.history || [];
 
-      // Spawn Antigravity CLI without shell: true to preserve exact arguments
-      const child = spawn('agy.EXE', ['-p', prompt, '--dangerously-skip-permissions'], {
+      let contextualPrompt = prompt;
+      const contextBlock = formatConversationContext(history);
+      if (contextBlock) {
+        contextualPrompt = `[Conversation History]\n${contextBlock}\n\n[Current User Message]\n${prompt}`;
+      }
+
+      const agyArgs = ['-p', contextualPrompt, '--dangerously-skip-permissions'];
+      if (model && !model.includes('default')) {
+        agyArgs.push('--model', model.replace('antigravity/', ''));
+      }
+
+      console.log(`[O1 Host Daemon] Spawning: agy.EXE with context (${history.length} prior turns)`);
+      let isSettled = false;
+      const child = spawn('agy.EXE', agyArgs, {
         cwd,
         shell: false,
       });
 
+      child.stdin.end();
+
+      const timeoutTimer = setTimeout(() => {
+        if (!isSettled) {
+          isSettled = true;
+          try {
+            if (isWin && child.pid) {
+              exec(`taskkill /pid ${child.pid} /T /F`);
+            } else {
+              child.kill('SIGINT');
+            }
+          } catch {}
+          ws.send(JSON.stringify({ id, type: 'stderr', data: 'Antigravity CLI timed out after 60s.\n' }));
+          ws.send(JSON.stringify({ id, type: 'done', exitCode: 1 }));
+        }
+      }, 60000);
+
       child.stdout.on('data', (data) => {
-        const text = data.toString();
-        ws.send(JSON.stringify({ id, type: 'stream_token', token: text }));
+        const text = data.toString()
+          .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+          .replace(/\u001B\[[0-9;]*[a-zA-Z]/g, '')
+          .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+          .replace(/^[□■\?]?\[\d+m/gm, '');
+        if (text) {
+          ws.send(JSON.stringify({ id, type: 'stream_token', token: text }));
+        }
       });
 
       child.stderr.on('data', (data) => {
@@ -453,7 +563,11 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       });
 
       child.on('close', (code) => {
-        ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeoutTimer);
+          ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+        }
       });
       break;
     }
@@ -465,28 +579,87 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       const prompt = params.prompt || params.query || '';
       const cwd = params.cwd || process.cwd();
       const model = params.model;
+      const history = params.history || [];
 
-      const opencodeArgs = ['run', prompt, '--auto'];
+      // Ensure model format has provider prefix (e.g. opencode/mimo-v2.6-flash-free)
+      let fullModel = 'opencode/mimo-v2.6-flash-free';
       if (model && !model.includes('default')) {
-        opencodeArgs.push('-m', model.replace('opencode/', ''));
+        fullModel = model.includes('/') ? model : `opencode/${model}`;
       }
 
-      console.log(`[O1 Host Daemon] Spawning: opencode ${opencodeArgs.join(' ')}`);
+      // App Brain Context Preservation: format recent conversation history
+      let contextualPrompt = prompt;
+      const contextBlock = formatConversationContext(history);
+      if (contextBlock) {
+        contextualPrompt = `[Conversation History]\n${contextBlock}\n\n[Current User Message]\n${prompt}`;
+      }
+
+      const safePrompt = isWin ? JSON.stringify(contextualPrompt) : contextualPrompt;
+      const opencodeArgs = ['run', '--pure', safePrompt, '--auto', '-m', fullModel];
+
+      console.log(`[O1 Host Daemon] Spawning: opencode run with context (${history.length} prior turns), model: ${fullModel}`);
+      let isSettled = false;
       const child = spawn(isWin ? 'opencode.cmd' : 'opencode', opencodeArgs, {
         cwd,
         shell: isWin,
       });
 
+      // Immediate stdin closure so OpenCode does not wait for interactive input
+      child.stdin.end();
+
+      const timeoutTimer = setTimeout(() => {
+        if (!isSettled) {
+          isSettled = true;
+          try {
+            if (isWin && child.pid) {
+              exec(`taskkill /pid ${child.pid} /T /F`);
+            } else {
+              child.kill('SIGINT');
+            }
+          } catch {}
+          ws.send(JSON.stringify({ id, type: 'stderr', data: 'OpenCode timed out after 45s.\n' }));
+          ws.send(JSON.stringify({ id, type: 'done', exitCode: 1 }));
+        }
+      }, 45000);
+
       child.stdout.on('data', (data) => {
-        ws.send(JSON.stringify({ id, type: 'stream_token', token: data.toString() }));
+        // Aggressively strip ANSI escape sequences and control characters
+        const text = data.toString()
+          .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+          .replace(/\u001B\[[0-9;]*[a-zA-Z]/g, '')
+          .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+          .replace(/^[□■\?]?\[\d+m/gm, '');
+        if (text) {
+          ws.send(JSON.stringify({ id, type: 'stream_token', token: text }));
+        }
       });
 
       child.stderr.on('data', (data) => {
-        ws.send(JSON.stringify({ id, type: 'stderr', data: data.toString() }));
+        const errText = data.toString();
+        // Check for session ID emission
+        const match = errText.match(/session\.id=([a-zA-Z0-9_-]+)/);
+        if (match) {
+          ws.send(JSON.stringify({ id, type: 'session_info', sessionId: match[1] }));
+        }
+        // Filter out internal diagnostic lines, terminal color resets, and build banners
+        if (
+          errText.includes('> build ·') ||
+          errText.includes('init count=') ||
+          errText.includes('session.id=') ||
+          errText.includes('\u001b') ||
+          errText.trim() === ''
+        ) {
+          return;
+        }
+        ws.send(JSON.stringify({ id, type: 'stderr', data: errText }));
       });
 
       child.on('close', (code) => {
-        ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeoutTimer);
+          ws.send(JSON.stringify({ id, type: 'done', exitCode: code }));
+        }
       });
       break;
     }
@@ -984,186 +1157,198 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
     }
 
     // -------------------------------------------------------------
-    // 13. DYNAMIC REAL MODELS & PROVIDERS FROM HERMES (NO HALLUCINATIONS)
+    // 13. DYNAMIC REAL MODELS & PROVIDERS FROM HERMES & STANDALONE CLIS
     // -------------------------------------------------------------
+    case 'models.refresh':
     case 'models.list': {
-      try {
-        const HERMES_DIR = path.join(
-          process.env.USERPROFILE || 'C:\\Users\\risha',
-          'AppData',
-          'Local',
-          'hermes'
-        );
-        const cacheFile = path.join(HERMES_DIR, 'provider_models_cache.json');
-        let cachedProviders: Record<string, { models: string[] }> = {};
-        if (fs.existsSync(cacheFile)) {
-          try {
-            cachedProviders = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
-          } catch {}
-        }
+      const doRefresh = params.refresh === true || method === 'models.refresh';
 
-        const PROVIDER_METADATA: Record<string, { name: string; engine: string; desc: string }> = {
-          'openai-codex': {
-            name: 'OpenAI',
-            engine: 'hermes',
-            desc: 'ChatGPT & OpenAI Codex models (Codex subscription)',
-          },
-          'opencode-free': {
-            name: 'OpenCode (Free)',
-            engine: 'hermes',
-            desc: 'Free coding intelligence models inside Hermes (Jev & Muse)',
-          },
-          'xai-oauth': {
-            name: 'xAI Grok',
-            engine: 'hermes',
-            desc: 'SuperGrok & Grok frontier models inside Hermes',
-          },
-          'gemini': {
-            name: 'Google Gemini',
-            engine: 'hermes',
-            desc: 'Gemini models with deep context & tool calls inside Hermes',
-          },
-          'openrouter': {
-            name: 'OpenRouter',
-            engine: 'hermes',
-            desc: 'Claude, DeepSeek & multi-model routing inside Hermes',
-          },
-          'groq': {
-            name: 'Groq LPUs',
-            engine: 'hermes',
-            desc: 'Ultra-low latency models inside Hermes',
-          },
-          'mistral': {
-            name: 'Mistral AI',
-            engine: 'hermes',
-            desc: 'Codestral & reasoning models inside Hermes',
-          },
-          'nvidia': {
-            name: 'NVIDIA NIM',
-            engine: 'hermes',
-            desc: 'Nemotron accelerated inference catalog inside Hermes',
-          },
-          'tokenrouter': {
-            name: 'TokenRouter',
-            engine: 'hermes',
-            desc: 'Community token routing inside Hermes',
-          },
-        };
+      const sendModelList = () => {
+        try {
+          const HERMES_DIR = path.join(
+            process.env.USERPROFILE || 'C:\\Users\\risha',
+            'AppData',
+            'Local',
+            'hermes'
+          );
+          const cacheFile = path.join(HERMES_DIR, 'provider_models_cache.json');
+          let cachedProviders: Record<string, { models: string[] }> = {};
+          if (fs.existsSync(cacheFile)) {
+            try {
+              cachedProviders = JSON.parse(fs.readFileSync(cacheFile, 'utf-8'));
+            } catch {}
+          }
 
-        const groups: any[] = [];
-
-        // 1. HERMES AGENT ENGINE PROVIDERS (Inside Hermes Runtime)
-        for (const [slug, data] of Object.entries(cachedProviders)) {
-          const meta = PROVIDER_METADATA[slug] || {
-            name: slug.toUpperCase(),
-            engine: 'hermes',
-            desc: `Authenticated Hermes provider: ${slug}`,
+          const PROVIDER_METADATA: Record<string, { name: string; engine: string; desc: string }> = {
+            'openai-codex': {
+              name: 'OpenAI',
+              engine: 'hermes',
+              desc: 'ChatGPT & OpenAI Codex models (Codex subscription)',
+            },
+            'opencode-free': {
+              name: 'OpenCode (Free)',
+              engine: 'hermes',
+              desc: 'Free coding intelligence models inside Hermes (Jev & Muse)',
+            },
+            'xai-oauth': {
+              name: 'xAI Grok',
+              engine: 'hermes',
+              desc: 'SuperGrok & Grok frontier models inside Hermes',
+            },
+            'gemini': {
+              name: 'Google Gemini',
+              engine: 'hermes',
+              desc: 'Gemini models with deep context & tool calls inside Hermes',
+            },
+            'openrouter': {
+              name: 'OpenRouter',
+              engine: 'hermes',
+              desc: 'Claude, DeepSeek & multi-model routing inside Hermes',
+            },
+            'groq': {
+              name: 'Groq LPUs',
+              engine: 'hermes',
+              desc: 'Ultra-low latency models inside Hermes',
+            },
+            'mistral': {
+              name: 'Mistral AI',
+              engine: 'hermes',
+              desc: 'Codestral & reasoning models inside Hermes',
+            },
+            'nvidia': {
+              name: 'NVIDIA NIM',
+              engine: 'hermes',
+              desc: 'Nemotron accelerated inference catalog inside Hermes',
+            },
+            'tokenrouter': {
+              name: 'TokenRouter',
+              engine: 'hermes',
+              desc: 'Community token routing inside Hermes',
+            },
           };
-          const isCurrentProvider =
-            activeHermesProvider.toLowerCase().includes(slug) ||
-            (slug === 'openai-codex' && activeHermesProvider.toLowerCase().includes('chatgpt'));
 
-          let providerDisplayName = meta.name;
-          if (slug.includes('mistral.ai')) providerDisplayName = 'Mistral AI';
-          else if (slug.includes('meta.ai')) providerDisplayName = 'Meta AI';
-          else if (slug.includes('experientiallabs')) providerDisplayName = 'Experiential Labs';
+          const groups: any[] = [];
 
-          const modelItems = (data.models || []).slice(0, 16).map((mId: string) => {
-            const isCurrent = mId === activeHermesModel;
-            let displayTitle = mId;
-            if (mId.includes('/')) {
-              displayTitle = mId.split('/').pop() || mId;
-            }
-            return {
-              id: mId,
-              name: displayTitle,
-              desc: isCurrent ? `Currently active in Hermes (${activeHermesProvider})` : `Available via ${providerDisplayName} in Hermes`,
-              isCurrent,
+          // 1. HERMES AGENT ENGINE PROVIDERS (Inside Hermes Runtime)
+          for (const [slug, data] of Object.entries(cachedProviders)) {
+            const meta = PROVIDER_METADATA[slug] || {
+              name: slug.toUpperCase(),
+              engine: 'hermes',
+              desc: `Authenticated Hermes provider: ${slug}`,
             };
-          });
+            const isCurrentProvider =
+              activeHermesProvider.toLowerCase().includes(slug) ||
+              (slug === 'openai-codex' && activeHermesProvider.toLowerCase().includes('chatgpt'));
 
-          // Ensure activeHermesModel is present in its provider group even if not in cache head
-          if (isCurrentProvider && !modelItems.some((m) => m.id === activeHermesModel)) {
-            modelItems.unshift({
-              id: activeHermesModel,
-              name: activeHermesModel,
-              desc: `Currently active in Hermes (${activeHermesProvider})`,
-              isCurrent: true,
+            let providerDisplayName = meta.name;
+            if (slug.includes('mistral.ai')) providerDisplayName = 'Mistral AI';
+            else if (slug.includes('meta.ai')) providerDisplayName = 'Meta AI';
+            else if (slug.includes('experientiallabs')) providerDisplayName = 'Experiential Labs';
+
+            const modelItems = (data.models || []).slice(0, 16).map((mId: string) => {
+              const isCurrent = mId === activeHermesModel;
+              let displayTitle = mId;
+              if (mId.includes('/')) {
+                displayTitle = mId.split('/').pop() || mId;
+              }
+              return {
+                id: mId,
+                name: displayTitle,
+                desc: isCurrent ? `Currently active in Hermes (${activeHermesProvider})` : `Available via ${providerDisplayName} in Hermes`,
+                isCurrent,
+              };
+            });
+
+            // Ensure activeHermesModel is present in its provider group even if not in cache head
+            if (isCurrentProvider && !modelItems.some((m) => m.id === activeHermesModel)) {
+              modelItems.unshift({
+                id: activeHermesModel,
+                name: activeHermesModel,
+                desc: `Currently active in Hermes (${activeHermesProvider})`,
+                isCurrent: true,
+              });
+            }
+
+            groups.push({
+              provider: providerDisplayName,
+              slug,
+              engine: meta.engine,
+              category: 'hermes',
+              isCurrent: isCurrentProvider,
+              desc: meta.desc,
+              models: modelItems,
             });
           }
 
-          groups.push({
-            provider: providerDisplayName,
-            slug,
-            engine: meta.engine,
-            category: 'hermes',
-            isCurrent: isCurrentProvider,
-            desc: meta.desc,
-            models: modelItems,
-          });
+          // Sort Hermes providers so the currently active provider is at the top
+          groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
+
+          // 2. STANDALONE ENGINES (Direct CLI on Host PC, accessible via WebSocket)
+          const standaloneEngines: any[] = [
+            {
+              provider: 'OpenCode CLI',
+              slug: 'opencode-cli',
+              engine: 'opencode',
+              category: 'standalone',
+              isCurrent: false,
+              desc: 'Direct OpenCode runtime on host PC (opencode run / serve via WS)',
+              models: dynamicOpencodeModels,
+            },
+            {
+              provider: 'Antigravity CLI ACP',
+              slug: 'antigravity',
+              engine: 'antigravity',
+              category: 'standalone',
+              isCurrent: false,
+              desc: 'Google Deepmind Advanced Agentic Coding CLI (agy on host PC)',
+              models: dynamicAgyModels,
+            },
+            {
+              provider: 'Claude Code CLI',
+              slug: 'claude-cli',
+              engine: 'claude',
+              category: 'standalone',
+              isCurrent: false,
+              desc: 'Anthropic Claude Code CLI on host PC',
+              models: [
+                {
+                  id: 'claude-3-7-sonnet',
+                  name: 'Claude 3.7 Sonnet',
+                  desc: 'Hybrid reasoning and deep codebase exploration',
+                },
+                {
+                  id: 'claude-3-5-sonnet',
+                  name: 'Claude 3.5 Sonnet',
+                  desc: 'Fast architectural synthesis & multi-file coding',
+                },
+              ],
+            },
+          ];
+
+          const allGroups = [...groups, ...standaloneEngines];
+
+          ws.send(
+            JSON.stringify({
+              id,
+              activeModel: activeHermesModel,
+              activeProvider: activeHermesProvider,
+              result: allGroups,
+            })
+          );
+        } catch (err: any) {
+          console.error('[O1 Host Daemon] models.list error:', err);
+          ws.send(JSON.stringify({ id, error: err.message, result: [] }));
         }
+      };
 
-        // Sort Hermes providers so the currently active provider is at the top
-        groups.sort((a, b) => (b.isCurrent ? 1 : 0) - (a.isCurrent ? 1 : 0));
-
-        // Trigger async refresh of CLI models
-        refreshCliModels();
-
-        // 2. STANDALONE ENGINES (Direct CLI on Host PC, accessible via WebSocket)
-        const standaloneEngines: any[] = [
-          {
-            provider: 'OpenCode CLI',
-            slug: 'opencode-cli',
-            engine: 'opencode',
-            category: 'standalone',
-            isCurrent: false,
-            desc: 'Direct OpenCode runtime on host PC (opencode run / serve via WS)',
-            models: dynamicOpencodeModels,
-          },
-          {
-            provider: 'Antigravity CLI ACP',
-            slug: 'antigravity',
-            engine: 'antigravity',
-            category: 'standalone',
-            isCurrent: false,
-            desc: 'Google Deepmind Advanced Agentic Coding CLI (agy on host PC)',
-            models: dynamicAgyModels,
-          },
-          {
-            provider: 'Claude Code CLI',
-            slug: 'claude-cli',
-            engine: 'claude',
-            category: 'standalone',
-            isCurrent: false,
-            desc: 'Anthropic Claude Code CLI on host PC',
-            models: [
-              {
-                id: 'claude-3-7-sonnet',
-                name: 'Claude 3.7 Sonnet',
-                desc: 'Hybrid reasoning and deep codebase exploration',
-              },
-              {
-                id: 'claude-3-5-sonnet',
-                name: 'Claude 3.5 Sonnet',
-                desc: 'Fast architectural synthesis & multi-file coding',
-              },
-            ],
-          },
-        ];
-
-        const allGroups = [...groups, ...standaloneEngines];
-
-        ws.send(
-          JSON.stringify({
-            id,
-            activeModel: activeHermesModel,
-            activeProvider: activeHermesProvider,
-            result: allGroups,
-          })
-        );
-      } catch (err: any) {
-        console.error('[O1 Host Daemon] models.list error:', err);
-        ws.send(JSON.stringify({ id, error: err.message, result: [] }));
+      if (doRefresh) {
+        refreshCliModels().then(() => {
+          updateHermesMetadata(() => {
+            sendModelList();
+          });
+        });
+      } else {
+        sendModelList();
       }
       break;
     }
@@ -1180,8 +1365,30 @@ function handleRPC(ws: WebSocket, req: RPCRequest) {
       }
       console.log(`[O1 Host Daemon] Switching model to: ${targetModel} (provider: ${targetProvider || 'default'})`);
       
+      const isStandalone =
+        targetProvider === 'opencode-cli' ||
+        targetProvider === 'antigravity' ||
+        targetProvider === 'claude-cli' ||
+        (targetModel && targetModel.startsWith('opencode/'));
+
+      if (isStandalone) {
+        // Direct Standalone CLI on Host PC - acknowledge success without touching Hermes config.yaml
+        ws.send(
+          JSON.stringify({
+            id,
+            result: {
+              success: true,
+              model: targetModel,
+              provider: targetProvider,
+              engine: targetProvider === 'antigravity' ? 'antigravity' : 'opencode',
+            },
+          })
+        );
+        break;
+      }
+
       let cmd = `${hermesBin} config set model "${targetModel}"`;
-      if (targetProvider) {
+      if (targetProvider && !targetProvider.includes('cli')) {
         cmd += ` && ${hermesBin} config set model.provider "${targetProvider}"`;
       }
 
