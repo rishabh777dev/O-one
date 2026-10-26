@@ -363,9 +363,10 @@ export const CockpitScreen: React.FC = () => {
         ) : null}
 
         {/* Message Stream */}
-        {agentMessages.map((msg: ChatMessage) => {
+        {agentMessages.map((msg: ChatMessage, index: number) => {
           const isUser = msg.sender === 'user';
           const isCopied = copiedMsgId === msg.id;
+          const isLast = index === agentMessages.length - 1;
 
           if (isUser) {
             return (
@@ -377,7 +378,7 @@ export const CockpitScreen: React.FC = () => {
                     { backgroundColor: agentColor },
                   ]}
                 >
-                  <Text style={styles.userText}>{msg.content}</Text>
+                  <Text style={styles.userText}>{sanitizeChatMessage(msg.content)}</Text>
                 </View>
 
                 {/* Micro Action Row */}
@@ -423,7 +424,13 @@ export const CockpitScreen: React.FC = () => {
           }
 
           // Agent Message
-          const isThinking = msg.isThinking || (!msg.content && !msg.actionCard);
+          // Thinking animation is ONLY rendered on the latest active message turn
+          const isThinking = isLast && (msg.isThinking || (!msg.content && !msg.actionCard));
+
+          // Never render an orphaned empty bubble from a prior turn
+          if (!isThinking && !msg.content && !msg.actionCard) {
+            return null;
+          }
 
           return (
             <View key={msg.id} style={styles.agentMsgWrapper}>

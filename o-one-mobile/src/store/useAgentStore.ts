@@ -11,6 +11,17 @@ const STORAGE_KEY_TITLES = '@o1_chat_titles_v1';
 export function sanitizeChatMessage(text: string): string {
   if (!text) return '';
   return text
+    // Strip ANSI escape sequences (e.g. \u001b[0m, \x1b[32m)
+    .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+    .replace(/\u001B\[[0-9;]*[a-zA-Z]/g, '')
+    // Strip control characters
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+    // Strip leftover terminal box glyphs like □[0m, ■[0m, ?[0m
+    .replace(/^[□■\?]?\[\d+m/gm, '')
+    .replace(/[□■\?]?\[\d+m/g, '')
+    // Strip OpenCode build headers
+    .replace(/^> build · [^\n]+\n*/gm, '')
+    // Strip Hermes banner artifacts
     .replace(/^(\u21bb|\u21ba|\u27f3)?\s*Resumed session\s+[^\n]+\n*/gim, '')
     .replace(/^session_id:\s*[^\n]+\n*/gim, '')
     .replace(/^Warning:\s*[^\n]+\n*/gim, '')
@@ -44,10 +55,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         const parsed = JSON.parse(data);
         const cleaned: Record<string, ChatMessage[]> = {};
         for (const [k, v] of Object.entries(parsed)) {
-          cleaned[k] = (v as ChatMessage[]).map((m) => ({
-            ...m,
-            content: sanitizeChatMessage(m.content),
-          }));
+          cleaned[k] = (v as ChatMessage[])
+            .map((m) => ({
+              ...m,
+              content: sanitizeChatMessage(m.content),
+              isThinking: false, // Persisted messages are never left in thinking state
+            }))
+            .filter((m) => (m.content && m.content.trim().length > 0) || m.actionCard);
         }
         set({ messages: cleaned });
       }
@@ -126,6 +140,20 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   sendMessage: (agent, text) => {
     const agentId = agent.id;
     const currentList = get().messages[agentId] || [];
+
+    // 1. Purge any stale, empty, or orphaned thinking bubbles from previous interrupted runs
+    const cleanedList = currentList.filter(
+      (m) => (m.content && m.content.trim().length > 0) || m.actionCard
+    );
+
+    // 2. Prepare the App Brain conversation context from recent valid turns
+    const recentHistory = cleanedList
+      .slice(-12)
+      .map((m) => ({
+        role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
+        content: sanitizeChatMessage(m.content),
+      }));
+
     const userMsgId = `user-${Date.now()}`;
     const agentMsgId = `agent-${Date.now()}`;
 
@@ -144,7 +172,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
 
-    const updatedWithUser = [...currentList, userMsg, initialAgentMsg];
+    const updatedWithUser = [...cleanedList, userMsg, initialAgentMsg];
     const nextMessages = {
       ...get().messages,
       [agentId]: updatedWithUser,
@@ -245,9 +273,31 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     let rpcMethod = 'hermes.chat';
     if (agent.engine === 'antigravity') {
       rpcMethod = 'antigravity.run';
-    } else if (agent.engine === 'opencode' || (agent.model && agent.model.startsWith('opencode/'))) {
+    } else if (
+      agent.engine === 'opencode' ||
+      (agent.model &&
+        (agent.model.startsWith('opencode/') ||
+          agent.model.includes('flash-free') ||
+          agent.model.includes('pickle') ||
+          agent.model.includes('beam') ||
+          agent.model.includes('ultra-free') ||
+          agent.model.includes('lightning-free')))
+    ) {
       rpcMethod = 'opencode.run';
     }
+
+    const thinkingTimeout = setTimeout(() => {
+      const currentMsg = (get().messages[agentId] || []).find((m) => m.id === agentMsgId);
+      if (currentMsg && currentMsg.isThinking) {
+        const fallbackText =
+          accumulatedText ||
+          '⚠️ Response timed out after 45s. Verify that the host daemon is running on your laptop.';
+        const updatedList = (get().messages[agentId] || []).map((m) =>
+          m.id === agentMsgId ? { ...m, content: fallbackText, isThinking: false } : m
+        );
+        set({ messages: { ...get().messages, [agentId]: updatedList } });
+      }
+    }, 45000);
 
     rpcClient.send(
       rpcMethod,
@@ -259,12 +309,20 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         cwd: agent.workspacePath,
         agentId,
         sessionId: get().sessions[agentId],
+        history: recentHistory,
       },
       (res: RPCResponse) => {
+        if (res.type === 'stream_token' || res.type === 'done' || res.type === 'process_exit') {
+          clearTimeout(thinkingTimeout);
+        }
+
         if (res.type === 'stream_token' && res.token) {
-          accumulatedText += res.token;
+          const cleanToken = res.token
+            .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+            .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+          accumulatedText += cleanToken;
           const updatedList = (get().messages[agentId] || []).map((m) =>
-            m.id === agentMsgId ? { ...m, content: accumulatedText, isThinking: false } : m
+            m.id === agentMsgId ? { ...m, content: sanitizeChatMessage(accumulatedText), isThinking: false } : m
           );
           set({
             messages: {
@@ -284,12 +342,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             AsyncStorage.setItem(STORAGE_KEY_TITLES, JSON.stringify(nextTitles));
           }
         } else if (res.type === 'stdout' && res.data) {
+          const cleanData = res.data
+            .replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '')
+            .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
           const isBanner =
-            res.data.includes('Resumed session') ||
-            res.data.startsWith('Warning:') ||
-            res.data.startsWith('session_id:');
+            cleanData.includes('Resumed session') ||
+            cleanData.startsWith('Warning:') ||
+            cleanData.startsWith('session_id:');
           if (!isBanner) {
-            accumulatedText += res.data;
+            accumulatedText += cleanData;
             const updatedList = (get().messages[agentId] || []).map((m) =>
               m.id === agentMsgId ? { ...m, content: sanitizeChatMessage(accumulatedText), isThinking: false } : m
             );
@@ -301,23 +362,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             });
           }
         } else if (res.type === 'stderr' && res.data) {
-          const isBanner =
-            res.data.includes('Resumed session') ||
-            res.data.includes('session_id:') ||
-            res.data.includes('Warning:') ||
-            res.data.includes('DeprecationWarning');
-          if (!isBanner && !accumulatedText) {
-            accumulatedText += res.data;
-            const updatedList = (get().messages[agentId] || []).map((m) =>
-              m.id === agentMsgId ? { ...m, content: sanitizeChatMessage(accumulatedText), isThinking: false } : m
-            );
-            set({
-              messages: {
-                ...get().messages,
-                [agentId]: updatedList,
-              },
-            });
-          }
+          // Diagnostic CLI logs/colors on stderr should not be appended to chat text
+          console.log('[RPC Diagnostic stderr]:', res.data);
         } else if (res.type === 'done' || res.result) {
           // Keep accumulatedText if it has streamed content so the text doesn't abruptly mutate
           const streamText = sanitizeChatMessage(accumulatedText);
@@ -331,7 +377,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }
 
           const updatedList = (get().messages[agentId] || []).map((m) =>
-            m.id === agentMsgId ? { ...m, content: settled, isThinking: false } : m
+            m.id === agentMsgId ? { ...m, content: sanitizeChatMessage(settled), isThinking: false } : m
           );
 
           const nextSessions = { ...get().sessions };
