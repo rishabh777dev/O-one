@@ -1,0 +1,11 @@
+{
+  "name": "o-one",
+  "version": "1.0.0",
+  "private": true,
+  "description": "O One - Multimodal Autonomous AI Agent Cockpit",
+  "scripts": {
+    "host": "cd host-daemon && npx tsx server.ts",
+    "start": "cd host-daemon && npx tsx server.ts",
+    "mobile": "cd o-one-mobile && npx expo start"
+  }
+}
